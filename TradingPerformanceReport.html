@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>트레이딩 성과 리포트</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f4f7f6;
+    --panel:#ffffff;
+    --panel-2:#eef2f1;
+    --border:#dbe3e1;
+    --text:#182422;
+    --text-dim:#687975;
+    --profit:#1a9c5c;
+    --profit-dim:#c9f0da;
+    --loss:#d6483f;
+    --loss-dim:#f6d4d1;
+    --amber:#c97a1f;
+    --amber-bg:#f4be7a;
+    --font-display:'Space Grotesk',sans-serif;
+    --font-mono:'JetBrains Mono',monospace;
+    --font-body:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--font-body);}
+  body{padding-bottom:60px;}
+  h1,h2,h3{font-family:var(--font-display);margin:0;}
+  .mono{font-family:var(--font-mono);}
+
+  /* Header */
+  header{padding:20px 16px 14px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(244,247,246,0.92);backdrop-filter:blur(8px);z-index:10;}
+  header h1{font-size:20px;letter-spacing:-0.02em;}
+  header .sub{font-size:12px;color:var(--text-dim);margin-top:2px;font-family:var(--font-mono);}
+
+  /* Ticker tape */
+  .ticker-wrap{overflow:hidden;background:var(--panel);border-bottom:1px solid var(--border);white-space:nowrap;position:relative;}
+  .ticker-wrap::before, .ticker-wrap::after{content:"";position:absolute;top:0;bottom:0;width:24px;z-index:2;pointer-events:none;}
+  .ticker-wrap::before{left:0;background:linear-gradient(90deg,var(--panel),transparent);}
+  .ticker-wrap::after{right:0;background:linear-gradient(270deg,var(--panel),transparent);}
+  .ticker{display:inline-flex;animation:scroll 28s linear infinite;padding:10px 0;}
+  .ticker:hover{animation-play-state:paused;}
+  @keyframes scroll{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+  .tick-item{display:inline-flex;align-items:baseline;gap:6px;padding:0 22px;font-family:var(--font-mono);font-size:13px;border-right:1px solid var(--border);}
+  .tick-label{color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;}
+  .tick-val.up{color:var(--profit);}
+  .tick-val.down{color:var(--loss);}
+
+  main{max-width:720px;margin:0 auto;padding:18px 16px;}
+
+  /* Upload zone */
+  .upload-zone{border:1.5px dashed var(--border);border-radius:10px;padding:12px 14px;margin-bottom:20px;transition:border-color .15s, background .15s;}
+  .upload-zone.drag{border-color:var(--amber);background:rgba(201,122,31,0.06);}
+  .upload-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .upload-hint{color:var(--text-dim);font-size:11px;}
+  .upload-zone input{display:none;}
+  .btn{display:inline-block;background:var(--amber-bg);color:#3a2405;font-weight:600;font-family:var(--font-display);border:none;border-radius:8px;padding:10px 18px;font-size:14px;cursor:pointer;}
+  .btn.ghost{background:transparent;color:var(--text);border:1px solid var(--border);}
+  .btn.ghost.active{background:var(--amber-bg);color:#3a2405;border-color:var(--amber-bg);}
+  .btn.small{padding:7px 12px;font-size:12px;}
+  .btn:active{opacity:0.8;}
+  textarea.paste-area{width:100%;min-height:90px;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:10px;margin-top:10px;resize:vertical;}
+
+  /* Cards */
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;box-shadow:0 1px 2px rgba(24,36,34,0.04);}
+  .card h2{font-size:14px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px;}
+
+  .metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .period-banner{font-family:var(--font-mono);font-size:13px;color:var(--text);background:var(--panel-2);border-radius:8px;padding:9px 12px;margin-bottom:12px;text-align:center;}
+  .period-banner b{color:var(--amber);}
+  .metric{background:var(--panel-2);border-radius:8px;padding:12px;}
+  .metric .num{font-family:var(--font-mono);font-size:20px;font-weight:600;}
+  .metric .lbl{font-size:11px;color:var(--text-dim);margin-top:3px;}
+  .metric .num.up{color:var(--profit);}
+  .metric .num.down{color:var(--loss);}
+  .metric .sub-usd{font-size:11px;color:var(--text-dim);margin-top:2px;font-family:var(--font-mono);}
+
+  canvas{width:100%;display:block;cursor:crosshair;}
+
+  .chart-tooltip{position:fixed;pointer-events:none;background:#182422;color:#f4f7f6;font-family:var(--font-mono);font-size:11.5px;line-height:1.5;padding:8px 10px;border-radius:6px;white-space:nowrap;opacity:0;transform:translate(-50%,-100%);transition:opacity .1s;z-index:999;box-shadow:0 4px 10px rgba(24,36,34,0.25);}
+  .chart-tooltip b{font-family:var(--font-display);}
+  .chart-wrap{position:relative;}
+
+  .symbol-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);}
+  .symbol-row:last-child{border-bottom:none;}
+  .symbol-name{font-family:var(--font-mono);font-weight:600;font-size:13px;}
+  .symbol-meta{font-size:11px;color:var(--text-dim);margin-top:2px;}
+  .symbol-pnl{font-family:var(--font-mono);font-weight:600;font-size:14px;}
+
+  .period-toggle{display:flex;gap:6px;margin-bottom:12px;}
+  .toggle-btn{background:var(--panel-2);border:1px solid var(--border);color:var(--text-dim);font-family:var(--font-display);font-size:12px;font-weight:600;padding:6px 14px;border-radius:6px;cursor:pointer;}
+  .toggle-btn.active{background:var(--amber-bg);color:#3a2405;border-color:var(--amber-bg);}
+
+  .view-tabs{display:flex;gap:8px;margin-bottom:14px;}
+  .view-tabs .toggle-btn{flex:1;padding:10px 14px;font-size:13px;}
+
+  table.week-table{width:100%;border-collapse:collapse;font-size:12px;}
+  table.week-table th{text-align:right;color:var(--text-dim);font-weight:500;padding:6px 4px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;}
+  table.week-table th:first-child, table.week-table td:first-child{text-align:left;}
+  table.week-table td{text-align:right;padding:8px 4px;font-family:var(--font-mono);border-bottom:1px solid var(--border);}
+
+  .api-row{display:flex;gap:8px;margin-bottom:10px;}
+  .api-row input{flex:1;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:9px 10px;font-family:var(--font-mono);font-size:12px;}
+  .summary-output{white-space:pre-wrap;line-height:1.7;font-size:13.5px;background:var(--panel-2);border-radius:8px;padding:14px;border-left:2px solid var(--amber);}
+  .hint{font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.6;}
+  .empty-state{text-align:center;color:var(--text-dim);font-size:13px;padding:30px 10px;}
+  .loading-dot{display:inline-block;animation:pulse 1.2s infinite;}
+  @keyframes pulse{0%,100%{opacity:0.3;}50%{opacity:1;}}
+</style>
+</head>
+<body>
+
+<div class="chart-tooltip" id="chartTooltip"></div>
+
+<header>
+  <h1>📊 트레이딩 성과 리포트</h1>
+  <div class="sub" id="reportRange">MT5 히스토리를 업로드하세요</div>
+</header>
+
+<div class="ticker-wrap" id="tickerWrap" style="display:none;">
+  <div class="ticker" id="ticker"></div>
+</div>
+
+<main>
+
+  <div class="upload-zone" id="dropZone">
+    <div class="upload-row">
+      <button class="btn small" onclick="document.getElementById('fileInput').click()">📁 파일 선택</button>
+      <button class="btn ghost small" id="pasteToggle">붙여넣기</button>
+      <span class="upload-hint">MT5 이력(History) → Report 저장(HTML) 또는 CSV</span>
+    </div>
+    <input type="file" id="fileInput" accept=".html,.htm,.csv,.txt">
+    <textarea class="paste-area" id="pasteArea" style="display:none;" placeholder="MT5 리포트 HTML 또는 CSV 원본을 여기에 붙여넣으세요"></textarea>
+    <div id="pasteBtnWrap" style="display:none;margin-top:8px;">
+      <button class="btn small" id="pasteParseBtn">붙여넣은 내용 분석</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>☁️ 클라우드 동기화 (GitHub Gist)</h2>
+    <div class="api-row">
+      <input type="password" id="gistTokenInput" placeholder="GitHub Personal Access Token (gist 권한)">
+      <button class="btn small" id="saveTokenBtn">저장</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn small" id="saveToGistBtn">☁️ 지금 저장</button>
+      <button class="btn ghost small" id="loadFromGistBtn">🔄 불러오기</button>
+    </div>
+    <div class="hint" id="gistStatus">토큰을 저장하면, 한 기기에서 업로드한 리포트를 다른 기기에서 파일 없이 바로 불러올 수 있어요. 토큰은 이 브라우저에만 저장됩니다.</div>
+  </div>
+
+  <div class="view-tabs" id="viewTabs" style="display:none;">
+    <button class="toggle-btn active" data-view="performance">📈 성과 리포트</button>
+    <button class="toggle-btn" data-view="cashflow">💰 입출금 내역</button>
+  </div>
+
+  <div id="resultsArea" style="display:none;">
+
+    <div id="viewPerformance">
+
+    <div class="card">
+      <h2>핵심 지표</h2>
+      <div class="period-banner" id="periodBanner"></div>
+      <button class="btn ghost small" id="krwToggleBtn2" style="margin-bottom:12px;">₩ 원화 환산 보기</button>
+      <div class="metric-grid" id="metricGrid"></div>
+    </div>
+
+    <div class="card">
+      <h2>자산 곡선 (Equity Curve)</h2>
+      <div class="chart-wrap"><canvas id="equityCanvas" height="180"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h2>기간별 손익</h2>
+      <div class="period-toggle">
+        <button class="toggle-btn" data-period="month">월별</button>
+        <button class="toggle-btn" data-period="week">주간</button>
+      </div>
+      <div class="chart-wrap"><canvas id="periodCanvas" height="150"></canvas></div>
+      <div style="overflow-x:auto;">
+        <table class="week-table" id="weekTable"></table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>종목별 수익</h2>
+      <div class="chart-wrap"><canvas id="symbolCanvas" height="150"></canvas></div>
+      <div id="symbolList"></div>
+    </div>
+
+    <div class="card">
+      <h2>AI 주간 요약</h2>
+      <div class="api-row">
+        <input type="password" id="apiKeyInput" placeholder="Claude API 키 (sk-ant-...)">
+        <button class="btn small" id="saveKeyBtn">저장</button>
+      </div>
+      <button class="btn" id="genSummaryBtn" style="width:100%;">이번 기간 요약 생성</button>
+      <div class="hint">API 키는 이 브라우저의 로컬 저장소에만 저장되며 외부로 전송되지 않습니다. 요약 생성 시에만 Anthropic API로 직접 요청을 보냅니다.</div>
+      <div id="summaryOutput" style="margin-top:12px;"></div>
+    </div>
+
+    </div>
+
+    <div id="viewCashflow" style="display:none;">
+
+      <div class="card">
+        <h2>입출금 요약</h2>
+        <button class="btn ghost small" id="krwToggleBtn" style="margin-bottom:12px;">₩ 원화 환산 보기</button>
+        <div class="metric-grid" id="cashSummaryGrid"></div>
+        <div class="hint" id="krwHint" style="display:none;"></div>
+        <div class="api-row" id="manualRateRow" style="display:none;margin-top:10px;">
+          <input type="number" id="manualRateInput" placeholder="직접 입력: 1 USD = ? KRW (예: 1380)" step="0.01">
+          <button class="btn small" id="manualRateBtn">적용</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>입금 내역 (월별 · 종류별)</h2>
+        <div class="chart-wrap"><canvas id="depositCanvas" height="150"></canvas></div>
+        <div style="overflow-x:auto;">
+          <table class="week-table" id="depositTable"></table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>출금 내역 (월별 · 종류별)</h2>
+        <div class="chart-wrap"><canvas id="withdrawCanvas" height="150"></canvas></div>
+        <div style="overflow-x:auto;">
+          <table class="week-table" id="withdrawTable"></table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>프로모션 / 보너스 (월별)</h2>
+        <div class="chart-wrap"><canvas id="promoCanvas" height="150"></canvas></div>
+        <div style="overflow-x:auto;">
+          <table class="week-table" id="promoTable"></table>
+        </div>
+        <div id="promoList" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="empty-state" id="cashflowEmpty" style="display:none;">
+        이 리포트에서 입출금(잔액 변동) 내역을 찾지 못했어요. MT5 "거래" 섹션이 포함된 전체 히스토리 리포트인지 확인해주세요.
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="empty-state" id="emptyState">
+    아직 데이터가 없습니다. 위에서 히스토리 파일을 업로드해주세요.
+  </div>
+
+</main>
+
+<script>
+(function(){
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const pasteToggle = document.getElementById('pasteToggle');
+  const pasteArea = document.getElementById('pasteArea');
+  const pasteBtnWrap = document.getElementById('pasteBtnWrap');
+  const pasteParseBtn = document.getElementById('pasteParseBtn');
+  const resultsArea = document.getElementById('resultsArea');
+  const emptyState = document.getElementById('emptyState');
+  const reportRange = document.getElementById('reportRange');
+  const tickerWrap = document.getElementById('tickerWrap');
+  const ticker = document.getElementById('ticker');
+
+  let trades = []; // {time:Date, symbol, type, volume, price, profit}
+
+  // ---------- File / paste handling ----------
+  ['dragover','dragenter'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault();dropZone.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>dropZone.addEventListener(ev,e=>{e.preventDefault();dropZone.classList.remove('drag');}));
+  dropZone.addEventListener('drop', e=>{
+    const f = e.dataTransfer.files[0];
+    if(f) readFile(f);
+  });
+  fileInput.addEventListener('change', e=>{
+    const f = e.target.files[0];
+    if(f) readFile(f);
+  });
+  pasteToggle.addEventListener('click', ()=>{
+    const showing = pasteArea.style.display !== 'none';
+    pasteArea.style.display = showing ? 'none' : 'block';
+    pasteBtnWrap.style.display = showing ? 'none' : 'block';
+  });
+  pasteParseBtn.addEventListener('click', ()=>{
+    processRawText(pasteArea.value);
+  });
+  async function toggleKRWDisplay(){
+    showKRW = !showKRW;
+    syncKRWButtons();
+    await renderCashflowView();
+    renderMetricGrid();
+  }
+
+  function syncKRWButtons(){
+    const label = showKRW ? '$ 달러로 보기' : '₩ 원화 환산 보기';
+    ['krwToggleBtn','krwToggleBtn2'].forEach(id=>{
+      const btn = document.getElementById(id);
+      if(!btn) return;
+      btn.textContent = label;
+      btn.classList.toggle('active', showKRW);
+    });
+  }
+
+  document.getElementById('krwToggleBtn').addEventListener('click', toggleKRWDisplay);
+  document.getElementById('krwToggleBtn2').addEventListener('click', toggleKRWDisplay);
+  document.getElementById('manualRateBtn').addEventListener('click', async ()=>{
+    const v = parseFloat(document.getElementById('manualRateInput').value);
+    if(!v || v <= 0){ alert('올바른 환율 숫자를 입력해주세요 (예: 1380)'); return; }
+    manualKRWRate = v;
+    showKRW = true;
+    syncKRWButtons();
+    await renderCashflowView();
+    renderMetricGrid();
+  });
+
+  function readFile(file){
+    const reader = new FileReader();
+    reader.onload = e => processRawText(decodeBuffer(e.target.result));
+    reader.readAsArrayBuffer(file);
+  }
+
+  // MT5 HTML reports are commonly saved as UTF-16LE with a BOM. Detect and decode correctly,
+  // otherwise the file garbles into mojibake and every Korean header fails to match.
+  function decodeBuffer(buffer){
+    const bytes = new Uint8Array(buffer);
+    if(bytes[0]===0xFF && bytes[1]===0xFE) return new TextDecoder('utf-16le').decode(buffer.slice(2));
+    if(bytes[0]===0xFE && bytes[1]===0xFF) return new TextDecoder('utf-16be').decode(buffer.slice(2));
+    if(bytes[0]===0xEF && bytes[1]===0xBB && bytes[2]===0xBF) return new TextDecoder('utf-8').decode(buffer.slice(3));
+    return new TextDecoder('utf-8').decode(buffer);
+  }
+
+  let lastOfficialSummary = null;
+  let lastCashFlows = [];
+  let lastStats = null;
+
+  function processRawText(raw){
+    if(!raw || raw.trim().length === 0){ alert('내용이 비어있습니다.'); return; }
+    let parsed = [];
+    lastOfficialSummary = null;
+    lastCashFlows = [];
+    if(/<table/i.test(raw)){
+      parsed = parseHtmlReport(raw);
+    } else {
+      parsed = parseCsv(raw);
+    }
+    if(parsed.length === 0){
+      alert('거래 내역을 찾지 못했습니다. MT5 "이력(History)" 보고서(HTML) 또는 Time/Symbol/Type/Profit 컬럼이 있는 CSV인지 확인해주세요.');
+      return;
+    }
+    trades = parsed.sort((a,b)=>a.time-b.time);
+    render();
+  }
+
+  // ---------- MT5 HTML report parser ----------
+  // MT5's "History Report" HTML export is ONE big <table> made of stacked sections
+  // (포지션/Positions, 주문/Orders, 거래/Deals, 오픈 포지션, 결과/Results...), each starting
+  // with a single <th colspan="14"> title row. Column labels differ by UI language, but the
+  // *shape* of each section (Positions: 13 visible cols, Orders: 11, Deals: 14, once a hidden
+  // spacer cell is filtered out) is constant regardless of language, so we detect sections
+  // structurally instead of by text match. This is far more reliable than matching header names.
+  function visibleCells(row){
+    return Array.from(row.children).filter(c => !(c.className && c.className.indexOf('hidden') >= 0));
+  }
+
+  function parseHtmlReport(html){
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const table = doc.querySelector('table');
+    if(!table) return legacyParseHtmlReport(doc);
+
+    const rows = Array.from(table.querySelectorAll('tr'));
+    const sections = [];
+    let current = null;
+    rows.forEach(row=>{
+      const cells = Array.from(row.children);
+      const isTitleRow = cells.length === 1 && cells[0].hasAttribute('colspan') && parseInt(cells[0].getAttribute('colspan'),10) >= 10;
+      if(isTitleRow){ current = { rows: [] }; sections.push(current); return; }
+      if(current) current.rows.push(row);
+    });
+
+    // Find the first section whose header row has exactly 13 visible columns -> Positions (closed trades)
+    let positionsSection = null;
+    for(const sec of sections){
+      if(sec.rows.length < 2) continue;
+      if(visibleCells(sec.rows[0]).length === 13){ positionsSection = sec; break; }
+    }
+
+    // Find the first 14-visible-column section -> Deals (includes balance/deposit/withdrawal rows)
+    let dealsSection = null;
+    for(const sec of sections){
+      if(sec.rows.length < 2) continue;
+      if(visibleCells(sec.rows[0]).length === 14){ dealsSection = sec; break; }
+    }
+    lastCashFlows = dealsSection ? extractCashFlows(dealsSection) : [];
+
+    // Bonus: pull MT5's own computed summary stats (결과/Results section) for a cross-check card
+    lastOfficialSummary = parseOfficialSummary(doc);
+
+    if(!positionsSection) return legacyParseHtmlReport(doc);
+
+    const out = [];
+    for(let i=1;i<positionsSection.rows.length;i++){
+      const cells = visibleCells(positionsSection.rows[i]).map(c=>c.textContent.trim());
+      if(cells.length < 13) continue;
+      const [openTimeStr, , symbolRaw, typeStr, volStr, , , , closeTimeStr, closePriceStr, commStr, swapStr, profitStr] = cells;
+      if(!/buy|sell/i.test(typeStr)) continue;
+      const grossProfit = toNumber(profitStr);
+      if(grossProfit === null) continue;
+      const closeTime = parseMt5Time(closeTimeStr);
+      if(!closeTime) continue;
+      const commission = toNumber(commStr) || 0;
+      const swap = toNumber(swapStr) || 0;
+      out.push({
+        time: closeTime,
+        openTime: parseMt5Time(openTimeStr),
+        symbol: symbolRaw.replace(/\+$/,''),
+        type: /sell/i.test(typeStr) ? 'sell' : 'buy',
+        volume: toNumber(volStr) || 0,
+        price: toNumber(closePriceStr) || 0,
+        profit: grossProfit + commission + swap, // net P&L, matches MT5's own 총수입 total exactly
+        commission,
+        swap
+      });
+    }
+    return out;
+  }
+
+  // Deals section columns (hidden spacer filtered): time, dealId, symbol, type, direction,
+  // volume, price, order, commission, fee, swap, profit, balance, comment. Cash-flow events
+  // (deposits, withdrawals, promo credits) always show up with type === 'balance'.
+  function extractCashFlows(section){
+    const out = [];
+    for(let i=1;i<section.rows.length;i++){
+      const cells = visibleCells(section.rows[i]).map(c=>c.textContent.trim());
+      if(cells.length < 14) continue;
+      if(cells[3] !== 'balance') continue;
+      const time = parseMt5Time(cells[0]);
+      const amount = toNumber(cells[11]);
+      const comment = cells[13] || '(설명 없음)';
+      if(!time || amount === null) continue;
+      out.push({ time, amount, comment, ...classifyCashFlow(comment) });
+    }
+    return out;
+  }
+
+  // Best-effort classification of a cash-flow comment into a group (deposit/withdraw/promo/other)
+  // and a human-readable Korean subtype, based on the comment patterns MT5 brokers commonly use.
+  function classifyCashFlow(comment){
+    const c = comment;
+    if(/^withdraw/i.test(c)){
+      if(/reversal/i.test(c)) return { group:'withdraw', subtype:'취소/환불' };
+      if(/usdt|trc|crypto|btc|eth/i.test(c)) return { group:'withdraw', subtype:'가상화폐(USDT 등)' };
+      if(/\bkr\b|banking|domestic/i.test(c)) return { group:'withdraw', subtype:'국내송금' };
+      return { group:'withdraw', subtype:'기타/해외송금' };
+    }
+    if(/^deposit/i.test(c)){
+      if(/usdt|trc|crypto|btc|eth/i.test(c)) return { group:'deposit', subtype:'가상화폐(USDT 등)' };
+      if(/\bkr\b|banking|domestic/i.test(c)) return { group:'deposit', subtype:'국내송금' };
+      return { group:'deposit', subtype:'기타/해외송금' };
+    }
+    if(/promo|bonus|cashback|rebate|comms free/i.test(c)){
+      return { group:'promo', subtype: c.replace(/#\d+/,'').trim() };
+    }
+    return { group:'other', subtype:'기타' };
+  }
+
+  // Fallback for report shapes that don't match the standard Positions-section layout
+  // (e.g. a simple custom export) — matches English/generic header names directly.
+  function legacyParseHtmlReport(doc){
+    const tables = Array.from(doc.querySelectorAll('table'));
+    let best = null, bestScore = 0;
+    tables.forEach(t=>{
+      const headText = t.textContent.toLowerCase();
+      let score = 0;
+      ['profit','symbol','time','type','volume'].forEach(k=>{ if(headText.includes(k)) score++; });
+      if(score > bestScore){ bestScore = score; best = t; }
+    });
+    if(!best) return [];
+
+    const rows = Array.from(best.querySelectorAll('tr'));
+    let headerIdx = {};
+    let headerRowFound = false;
+    const out = [];
+
+    rows.forEach(row=>{
+      const cells = Array.from(row.querySelectorAll('th,td')).map(c=>c.textContent.trim());
+      if(cells.length === 0) return;
+
+      if(!headerRowFound){
+        const lower = cells.map(c=>c.toLowerCase());
+        const map = {};
+        lower.forEach((c,i)=>{
+          if(/^time$/.test(c)) map.time = i;
+          else if(/^symbol$/.test(c)) map.symbol = i;
+          else if(/^type$/.test(c)) map.type = i;
+          else if(/^volume$/.test(c)) map.volume = i;
+          else if(/^price$/.test(c)) map.price = i;
+          else if(/^profit$/.test(c)) map.profit = i;
+          else if(/^commission$/.test(c)) map.commission = i;
+          else if(/^swap$/.test(c)) map.swap = i;
+          else if(/^balance$/.test(c)) map.balance = i;
+        });
+        if(map.time !== undefined && map.symbol !== undefined && map.profit !== undefined){
+          headerIdx = map;
+          headerRowFound = true;
+        }
+        return;
+      }
+
+      const symbol = cells[headerIdx.symbol];
+      const typeStr = (cells[headerIdx.type]||'').toLowerCase();
+      if(!symbol || symbol.trim()==='' ) return;
+      if(!/buy|sell/.test(typeStr)) return;
+
+      const profitStr = cells[headerIdx.profit];
+      const grossProfit = toNumber(profitStr);
+      if(grossProfit === null) return;
+
+      const timeStr = cells[headerIdx.time];
+      const time = parseMt5Time(timeStr);
+      if(!time) return;
+
+      const swap = headerIdx.swap!==undefined ? (toNumber(cells[headerIdx.swap])||0) : 0;
+      const commission = headerIdx.commission!==undefined ? (toNumber(cells[headerIdx.commission])||0) : 0;
+      out.push({
+        time, symbol: symbol.replace(/\+$/,''), type: typeStr.includes('buy') ? 'buy':'sell',
+        volume: toNumber(cells[headerIdx.volume]) || 0,
+        price: toNumber(cells[headerIdx.price]) || 0,
+        profit: grossProfit + commission + swap,
+        swap,
+        commission
+      });
+    });
+    return out;
+  }
+
+  // Best-effort extraction of MT5's own "결과/Results" summary block, so we can show
+  // an at-a-glance cross-check against our own computed numbers.
+  function parseOfficialSummary(doc){
+    const text = doc.body ? doc.body.textContent : '';
+    const patterns = {
+      totalNetProfit: /(?:총수입|Total Net Profit)[:\s]*([\-\d\s.,]+)/,
+      profitFactor: /Profit Factor[:\s]*([\d.]+)/i,
+      totalTrades: /(?:총\s*거래\s*횟수|Total Trades)[:\s]*(\d+)/,
+      maxDD: /Balance Drawdown Maximal[:\s]*([\-\d\s.,]+\([\d.]+%\))/i
+    };
+    const result = {};
+    for(const [k,re] of Object.entries(patterns)){
+      const m = text.match(re);
+      if(m) result[k] = m[1].trim();
+    }
+    return Object.keys(result).length ? result : null;
+  }
+
+  // ---------- Generic CSV parser ----------
+  function parseCsv(text){
+    const lines = text.split(/\r?\n/).filter(l=>l.trim().length>0);
+    if(lines.length < 2) return [];
+    const delim = lines[0].includes('\t') ? '\t' : (lines[0].includes(';') ? ';' : ',');
+    const header = lines[0].split(delim).map(h=>h.trim().toLowerCase().replace(/"/g,''));
+    const idx = {};
+    header.forEach((h,i)=>{
+      if(/time|date/.test(h) && idx.time===undefined) idx.time = i;
+      if(/symbol|instrument|pair/.test(h)) idx.symbol = i;
+      if(/type|direction|side/.test(h)) idx.type = i;
+      if(/volume|lots|size/.test(h)) idx.volume = i;
+      if(/^price$|open.?price/.test(h)) idx.price = i;
+      if(/profit|pnl|p\/l/.test(h)) idx.profit = i;
+    });
+    if(idx.time===undefined || idx.symbol===undefined || idx.profit===undefined) return [];
+
+    const out = [];
+    for(let i=1;i<lines.length;i++){
+      const cells = lines[i].split(delim).map(c=>c.trim().replace(/"/g,''));
+      const symbol = cells[idx.symbol];
+      if(!symbol) continue;
+      const profit = toNumber(cells[idx.profit]);
+      if(profit === null) continue;
+      const time = parseMt5Time(cells[idx.time]) || new Date(cells[idx.time]);
+      if(isNaN(time.getTime())) continue;
+      const typeStr = idx.type!==undefined ? (cells[idx.type]||'').toLowerCase() : '';
+      out.push({
+        time, symbol,
+        type: typeStr.includes('sell') ? 'sell':'buy',
+        volume: idx.volume!==undefined ? (toNumber(cells[idx.volume])||0) : 0,
+        price: idx.price!==undefined ? (toNumber(cells[idx.price])||0) : 0,
+        profit, swap:0, commission:0
+      });
+    }
+    return out;
+  }
+
+  function toNumber(str){
+    if(str === undefined || str === null) return null;
+    const cleaned = String(str).replace(/[^0-9.\-]/g,'');
+    if(cleaned === '' || cleaned === '-') return null;
+    const n = parseFloat(cleaned);
+    return isNaN(n) ? null : n;
+  }
+
+  function parseMt5Time(str){
+    if(!str) return null;
+    // MT5 format: 2026.07.08 14:32:05
+    const m = str.match(/(\d{4})[.\-\/](\d{2})[.\-\/](\d{2})\s+(\d{2}):(\d{2})(:(\d{2}))?/);
+    if(m){
+      return new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +(m[7]||0));
+    }
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // ---------- Stats & rendering ----------
+  function isoWeekKey(d){
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+    const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1)/7);
+    return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
+  }
+
+  function monthKey(d){
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  }
+
+  let currentPeriod = 'month';
+
+  function fmt(n, digits=2){
+    const sign = n < 0 ? '-' : '';
+    return sign + '$' + Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:digits, maximumFractionDigits:digits});
+  }
+
+  function render(){
+    emptyState.style.display = 'none';
+    resultsArea.style.display = 'block';
+    tickerWrap.style.display = 'block';
+
+    const first = trades[0].time, last = trades[trades.length-1].time;
+    const fmtDate = d => `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+    reportRange.textContent = `${fmtDate(first)} ~ ${fmtDate(last)} · 거래 ${trades.length}건`;
+    document.getElementById('periodBanner').innerHTML = `<b>${fmtDate(first)} ~ ${fmtDate(last)}</b> 누적 성과 · 총 ${trades.length}건`;
+
+    const wins = trades.filter(t=>t.profit>0);
+    const losses = trades.filter(t=>t.profit<0);
+    const totalProfit = trades.reduce((s,t)=>s+t.profit,0);
+    const grossWin = wins.reduce((s,t)=>s+t.profit,0);
+    const grossLoss = Math.abs(losses.reduce((s,t)=>s+t.profit,0));
+    const winRate = trades.length ? (wins.length/trades.length*100) : 0;
+    const profitFactor = grossLoss>0 ? (grossWin/grossLoss) : (grossWin>0?Infinity:0);
+    const avgWin = wins.length ? grossWin/wins.length : 0;
+    const avgLoss = losses.length ? grossLoss/losses.length : 0;
+    const totalSwap = trades.reduce((s,t)=>s+(t.swap||0),0);
+    const totalCommission = trades.reduce((s,t)=>s+(t.commission||0),0);
+
+    // equity curve & drawdown
+    let running = 0, peak = 0, maxDD = 0;
+    const curve = trades.map(t=>{
+      running += t.profit;
+      peak = Math.max(peak, running);
+      maxDD = Math.max(maxDD, peak - running);
+      return running;
+    });
+
+    // metric cards
+    lastStats = { totalProfit, winRate, wins: wins.length, losses: losses.length, profitFactor, maxDD, avgWin, avgLoss, totalSwap, totalCommission };
+    renderMetricGrid();
+
+    // ticker
+    const tItems = [
+      {l:'TOTAL P/L', v:fmt(totalProfit), cls: totalProfit>=0?'up':'down'},
+      {l:'WIN RATE', v: winRate.toFixed(1)+'%', cls:''},
+      {l:'PF', v: profitFactor===Infinity?'∞':profitFactor.toFixed(2), cls:''},
+      {l:'MAX DD', v: '-'+fmt(maxDD), cls:'down'},
+      {l:'TRADES', v: trades.length, cls:''}
+    ];
+    const tickerHtml = tItems.map(i=>`<span class="tick-item"><span class="tick-label">${i.l}</span><span class="tick-val ${i.cls}">${i.v}</span></span>`).join('');
+    ticker.innerHTML = tickerHtml + tickerHtml; // duplicate for seamless scroll
+
+    drawEquityCurve(curve, trades.map(t=>t.time));
+    renderPeriodView();
+    renderSymbolList();
+    renderSymbolChart();
+    setupPeriodToggle();
+
+    document.getElementById('viewTabs').style.display = 'flex';
+    renderCashflowView();
+    setupViewTabs();
+  }
+
+  function setupViewTabs(){
+    const btns = document.querySelectorAll('#viewTabs .toggle-btn');
+    btns.forEach(btn=>{
+      btn.onclick = () => {
+        btns.forEach(b=>b.classList.toggle('active', b===btn));
+        document.getElementById('viewPerformance').style.display = btn.dataset.view === 'performance' ? 'block' : 'none';
+        document.getElementById('viewCashflow').style.display = btn.dataset.view === 'cashflow' ? 'block' : 'none';
+      };
+    });
+  }
+
+  function cashflowMonthKey(d){ return monthKey(d); }
+
+  // ---------- KRW conversion (optional, best-effort) ----------
+  // Kept deliberately simple: one current USD->KRW rate applied to everything,
+  // rather than per-month historical averages (which added complexity without
+  // enough payoff here).
+  let showKRW = false;
+  let currentKRWRate = null;
+  let manualKRWRate = null;
+
+  function fmtKRW(amount){
+    const sign = amount < 0 ? '-' : '';
+    return sign + '₩' + Math.round(Math.abs(amount)).toLocaleString('ko-KR');
+  }
+
+  async function getCurrentKRWRate(){
+    if(currentKRWRate) return currentKRWRate;
+    try{
+      const resp = await fetch('https://api.frankfurter.dev/v1/latest?base=USD&symbols=KRW');
+      if(resp.ok){
+        const data = await resp.json();
+        if(data.rates && data.rates.KRW){
+          currentKRWRate = data.rates.KRW;
+          return currentKRWRate;
+        }
+      }
+    }catch(e){ /* offline, blocked, or CORS issue — fall through to manual entry */ }
+    return null;
+  }
+
+  // Returns the KRW-per-USD rate currently in effect (manual entry takes priority
+  // over the auto-fetched one), or null if KRW display is off / no rate is known yet.
+  function getActiveRate(){
+    if(!showKRW) return null;
+    return manualKRWRate || currentKRWRate || null;
+  }
+
+  // Renders a metric value as KRW-first (large, primary) with the original USD amount
+  // as a smaller reference line underneath, when a rate is active. Falls back to a
+  // plain USD-only display otherwise. `value` is passed as a positive magnitude when
+  // `negate` is true (so the caller doesn't need to pre-apply the minus sign).
+  function dualAmount(value, cls, negate){
+    const usdText = (negate ? '-' : '') + fmt(value);
+    const rate = getActiveRate();
+    if(rate){
+      const krwText = (negate ? '-' : '') + fmtKRW(value * rate);
+      return `<div class="num ${cls}">${krwText}</div><div class="sub-usd">${usdText}</div>`;
+    }
+    return `<div class="num ${cls}">${usdText}</div>`;
+  }
+
+  function renderMetricGrid(){
+    if(!lastStats) return;
+    const s = lastStats;
+    const metricGrid = document.getElementById('metricGrid');
+    metricGrid.innerHTML = `
+      <div class="metric">${dualAmount(s.totalProfit, s.totalProfit>=0?'up':'down', false)}<div class="lbl">총 손익</div></div>
+      <div class="metric"><div class="num">${s.winRate.toFixed(1)}%</div><div class="lbl">승률 (${s.wins}승 ${s.losses}패)</div></div>
+      <div class="metric"><div class="num">${s.profitFactor===Infinity?'∞':s.profitFactor.toFixed(2)}</div><div class="lbl">Profit Factor</div></div>
+      <div class="metric">${dualAmount(s.maxDD, 'down', true)}<div class="lbl">최대 낙폭 (Drawdown)</div></div>
+      <div class="metric">${dualAmount(s.avgWin, 'up', false)}<div class="lbl">평균 이익</div></div>
+      <div class="metric">${dualAmount(s.avgLoss, 'down', true)}<div class="lbl">평균 손실</div></div>
+      <div class="metric">${dualAmount(s.totalSwap, s.totalSwap>=0?'up':'down', false)}<div class="lbl">총 스왑 비용</div></div>
+      <div class="metric">${dualAmount(s.totalCommission, s.totalCommission>=0?'up':'down', false)}<div class="lbl">총 수수료(커미션)</div></div>
+    `;
+
+    if(lastOfficialSummary){
+      const o = lastOfficialSummary;
+      metricGrid.innerHTML += `
+        <div class="metric" style="grid-column:1/-1;border:1px dashed var(--border);">
+          <div class="lbl" style="margin-bottom:6px;">MT5 공식 결과 요약 (교차 확인용)</div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px 18px;font-family:var(--font-mono);font-size:12px;color:var(--text-dim);">
+            ${o.totalNetProfit ? `<span>총수입 <span style="color:var(--text)">${o.totalNetProfit}</span></span>` : ''}
+            ${o.profitFactor ? `<span>PF <span style="color:var(--text)">${o.profitFactor}</span></span>` : ''}
+            ${o.totalTrades ? `<span>총거래 <span style="color:var(--text)">${o.totalTrades}</span></span>` : ''}
+            ${o.maxDD ? `<span>최대DD <span style="color:var(--text)">${o.maxDD}</span></span>` : ''}
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  async function renderCashflowView(){
+    const empty = document.getElementById('cashflowEmpty');
+    const cards = document.querySelectorAll('#viewCashflow .card');
+    if(lastCashFlows.length === 0){
+      empty.style.display = 'block';
+      cards.forEach(c=>c.style.display='none');
+      return;
+    }
+    empty.style.display = 'none';
+    cards.forEach(c=>c.style.display='block');
+
+    const deposits = lastCashFlows.filter(f=>f.group==='deposit');
+    const withdrawals = lastCashFlows.filter(f=>f.group==='withdraw');
+    const promos = lastCashFlows.filter(f=>f.group==='promo');
+
+    const totalDeposit = deposits.reduce((s,f)=>s+f.amount,0);
+    const totalWithdraw = withdrawals.reduce((s,f)=>s+f.amount,0); // withdrawals are typically negative already
+    const totalPromo = promos.reduce((s,f)=>s+f.amount,0);
+    const netFlow = totalDeposit + totalWithdraw;
+
+    let rate = null;
+    const krwHint = document.getElementById('krwHint');
+    const manualRateRow = document.getElementById('manualRateRow');
+    if(showKRW){
+      krwHint.style.display = 'block';
+      if(manualKRWRate){
+        rate = manualKRWRate;
+        krwHint.textContent = `직접 입력한 환율 적용: 1 USD = ${fmtKRW(rate)}`;
+        manualRateRow.style.display = 'flex';
+      } else {
+        krwHint.textContent = '환율 불러오는 중...';
+        rate = await getCurrentKRWRate();
+        if(rate){
+          krwHint.textContent = `현재 환율 적용: 1 USD ≈ ${fmtKRW(rate)}`;
+          manualRateRow.style.display = 'none';
+        } else {
+          krwHint.textContent = '자동으로 환율을 가져오지 못했어요. 아래에 오늘 환율을 직접 입력해주세요.';
+          manualRateRow.style.display = 'flex';
+        }
+      }
+    } else {
+      krwHint.style.display = 'none';
+      manualRateRow.style.display = 'none';
+    }
+
+    document.getElementById('cashSummaryGrid').innerHTML = `
+      <div class="metric">${dualAmount(totalDeposit, 'up', false)}<div class="lbl">총 입금액</div></div>
+      <div class="metric">${dualAmount(Math.abs(totalWithdraw), 'down', totalWithdraw<0)}<div class="lbl">총 출금액</div></div>
+      <div class="metric">${dualAmount(Math.abs(netFlow), netFlow>=0?'up':'down', netFlow<0)}<div class="lbl">순 입출금 (입금+출금)</div></div>
+      <div class="metric">${dualAmount(totalPromo, 'up', false)}<div class="lbl">총 프로모션/보너스</div></div>
+    `;
+
+    renderCashflowSection(deposits, 'depositCanvas', 'depositTable', rate);
+    renderCashflowSection(withdrawals, 'withdrawCanvas', 'withdrawTable', rate);
+    renderPromoSection(promos, rate);
+  }
+
+  // Builds a month x subtype matrix table (+ totals row) and a monthly-total bar chart
+  // for deposits or withdrawals. rate (optional) is a flat KRW-per-USD number.
+  function renderCashflowSection(entries, canvasId, tableId, rate){
+    if(entries.length === 0){
+      drawBarChart(canvasId, []);
+      document.getElementById(tableId).innerHTML = '<tr><th>내역 없음</th></tr>';
+      return;
+    }
+    const subtypes = Array.from(new Set(entries.map(e=>e.subtype)));
+    const byMonth = {};
+    entries.forEach(e=>{
+      const mk = cashflowMonthKey(e.time);
+      if(!byMonth[mk]) byMonth[mk] = { total:0, repDate:e.time };
+      subtypes.forEach(st=>{ if(byMonth[mk][st]===undefined) byMonth[mk][st]=0; });
+      byMonth[mk][e.subtype] += e.amount;
+      byMonth[mk].total += e.amount;
+      if(e.time < byMonth[mk].repDate) byMonth[mk].repDate = e.time;
+    });
+    const months = Object.keys(byMonth).sort();
+
+    const bars = months.map(mk=>{
+      const g = byMonth[mk];
+      const detail = subtypes.map(st => `${st} ${fmt(g[st]||0)}`).join('<br>');
+      return {
+        axisLabel: periodAxisLabel('month', mk, g.repDate),
+        value: g.total,
+        tooltip: `<b>${periodFullLabel('month', mk, g.repDate)}</b><br>합계 ${fmt(g.total)}<br>${detail}`
+      };
+    });
+    drawBarChart(canvasId, bars);
+
+    let html = `<tr><th>월</th>${subtypes.map(st=>`<th>${st}</th>`).join('')}<th>합계</th></tr>`;
+    months.slice().reverse().forEach(mk=>{
+      const g = byMonth[mk];
+      html += `<tr><td>${mk}</td>${subtypes.map(st=>`<td>${cellValue(g[st]||0, rate)}</td>`).join('')}<td style="font-weight:600;">${cellValue(g.total, rate)}</td></tr>`;
+    });
+
+    // totals row across all months, per subtype + grand total
+    const subtotals = {};
+    subtypes.forEach(st => { subtotals[st] = months.reduce((s,mk)=>s+(byMonth[mk][st]||0),0); });
+    const grandTotal = months.reduce((s,mk)=>s+byMonth[mk].total,0);
+    html += `<tr style="font-weight:700;border-top:2px solid var(--border);"><td>합계</td>${subtypes.map(st=>`<td>${cellValue(subtotals[st], rate)}</td>`).join('')}<td>${cellValue(grandTotal, rate)}</td></tr>`;
+    document.getElementById(tableId).innerHTML = html;
+  }
+
+  // Renders a single table-cell value: the USD amount, plus a small KRW line underneath
+  // when a conversion rate is active.
+  function cellValue(usd, rate){
+    if(rate){
+      return `${fmt(usd)}<br><span style="font-size:10px;color:var(--text-dim);font-weight:400;">${fmtKRW(usd*rate)}</span>`;
+    }
+    return fmt(usd);
+  }
+
+  function renderPromoSection(promos, rate){
+    if(promos.length === 0){
+      drawBarChart('promoCanvas', []);
+      document.getElementById('promoTable').innerHTML = '<tr><th>내역 없음</th></tr>';
+      document.getElementById('promoList').innerHTML = '';
+      return;
+    }
+    const byMonth = {};
+    promos.forEach(e=>{
+      const mk = cashflowMonthKey(e.time);
+      if(!byMonth[mk]) byMonth[mk] = { total:0, count:0, repDate:e.time };
+      byMonth[mk].total += e.amount;
+      byMonth[mk].count += 1;
+      if(e.time < byMonth[mk].repDate) byMonth[mk].repDate = e.time;
+    });
+    const months = Object.keys(byMonth).sort();
+    const bars = months.map(mk=>{
+      const g = byMonth[mk];
+      return {
+        axisLabel: periodAxisLabel('month', mk, g.repDate),
+        value: g.total,
+        tooltip: `<b>${periodFullLabel('month', mk, g.repDate)}</b><br>합계 ${fmt(g.total)}<br>${g.count}건`
+      };
+    });
+    drawBarChart('promoCanvas', bars);
+
+    let html = '<tr><th>월</th><th>건수</th><th>합계</th></tr>';
+    months.slice().reverse().forEach(mk=>{
+      const g = byMonth[mk];
+      html += `<tr><td>${mk}</td><td>${g.count}</td><td style="color:var(--profit);">${cellValue(g.total, rate)}</td></tr>`;
+    });
+    const grandTotal = months.reduce((s,mk)=>s+byMonth[mk].total,0);
+    const totalCount = months.reduce((s,mk)=>s+byMonth[mk].count,0);
+    html += `<tr style="font-weight:700;border-top:2px solid var(--border);"><td>합계</td><td>${totalCount}</td><td style="color:var(--profit);">${cellValue(grandTotal, rate)}</td></tr>`;
+    document.getElementById('promoTable').innerHTML = html;
+
+    // breakdown by promo type (e.g. "Promo-LP Booster", "Cash Promo-KR Trading Cashback")
+    const byType = {};
+    promos.forEach(e=>{
+      if(!byType[e.subtype]) byType[e.subtype] = {total:0,count:0};
+      byType[e.subtype].total += e.amount;
+      byType[e.subtype].count += 1;
+    });
+    document.getElementById('promoList').innerHTML = Object.entries(byType)
+      .sort((a,b)=>b[1].total-a[1].total)
+      .map(([type,g])=>`
+        <div class="symbol-row">
+          <div><div class="symbol-name">${type}</div><div class="symbol-meta">${g.count}건</div></div>
+          <div class="symbol-pnl" style="color:var(--profit);text-align:right;">${cellValue(g.total, rate)}</div>
+        </div>
+      `).join('');
+  }
+
+  function drawEquityCurve(curve, times){
+    const canvas = document.getElementById('equityCanvas');
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth, h = 180;
+    canvas.width = w*dpr; canvas.height = h*dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr,dpr);
+    ctx.clearRect(0,0,w,h);
+
+    if(curve.length < 2){
+      ctx.fillStyle = '#687975';
+      ctx.font = '12px monospace';
+      ctx.fillText('데이터가 부족합니다', 10, h/2);
+      return;
+    }
+
+    const padTop = 8, padBottom = 18, padSide = 8;
+    const chartH = h - padTop - padBottom;
+    const min = Math.min(0, ...curve), max = Math.max(0, ...curve);
+    const range = (max-min) || 1;
+    const x = i => padSide + (i/(curve.length-1)) * (w-padSide*2);
+    const y = v => padTop + chartH - ((v-min)/range)*chartH;
+
+    const finalUp = curve[curve.length-1] >= 0;
+    ctx.strokeStyle = finalUp ? '#1a9c5c' : '#d6483f';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    curve.forEach((v,i)=>{ i===0 ? ctx.moveTo(x(i),y(v)) : ctx.lineTo(x(i),y(v)); });
+    ctx.stroke();
+
+    // fill
+    const grad = ctx.createLinearGradient(0,0,0,h);
+    grad.addColorStop(0, finalUp ? 'rgba(26,156,92,0.16)' : 'rgba(214,72,63,0.16)');
+    grad.addColorStop(1, 'rgba(244,247,246,0)');
+    ctx.lineTo(x(curve.length-1), y(min));
+    ctx.lineTo(x(0), y(min));
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // zero line
+    if(min < 0 && max > 0){
+      ctx.strokeStyle = 'rgba(24,36,34,0.15)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padSide, y(0)); ctx.lineTo(w-padSide, y(0));
+      ctx.stroke();
+    }
+
+    // month tick marks along the x-axis, so the curve reads as an actual timeline
+    if(times && times.length === curve.length){
+      let prevMonth = null, lastLabelX = -999;
+      times.forEach((t,i)=>{
+        const mkey = `${t.getFullYear()}-${t.getMonth()}`;
+        if(mkey === prevMonth) return;
+        prevMonth = mkey;
+        const xpos = x(i);
+        if(xpos - lastLabelX < 26) return; // avoid crowding when months are close together
+        lastLabelX = xpos;
+        ctx.strokeStyle = 'rgba(24,36,34,0.08)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(xpos, padTop); ctx.lineTo(xpos, padTop+chartH);
+        ctx.stroke();
+        ctx.fillStyle = '#687975';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${t.getMonth()+1}월`, xpos+2, h-4);
+      });
+    }
+  }
+
+  function groupByPeriod(period){
+    const groups = {};
+    trades.forEach(t=>{
+      const key = period === 'month' ? monthKey(t.time) : isoWeekKey(t.time);
+      if(!groups[key]) groups[key] = {profit:0, count:0, wins:0, repDate:t.time};
+      groups[key].profit += t.profit;
+      groups[key].count += 1;
+      if(t.profit>0) groups[key].wins += 1;
+      if(t.time < groups[key].repDate) groups[key].repDate = t.time;
+    });
+    return groups;
+  }
+
+  function periodAxisLabel(period, key, repDate){
+    if(period === 'month'){
+      const [y,m] = key.split('-');
+      return `'${y.slice(2)}.${m}`;
+    }
+    return `${repDate.getMonth()+1}/${repDate.getDate()}`;
+  }
+
+  function periodFullLabel(period, key, repDate){
+    if(period === 'month'){
+      const [y,m] = key.split('-');
+      return `${y}년 ${parseInt(m,10)}월`;
+    }
+    return `${repDate.getFullYear()}년 ${repDate.getMonth()+1}월 · ${key}주차`;
+  }
+
+  function renderPeriodView(){
+    const groups = groupByPeriod(currentPeriod);
+    const keys = Object.keys(groups).sort();
+
+    const bars = keys.map(k=>{
+      const g = groups[k];
+      const wr = (g.wins/g.count*100).toFixed(0);
+      return {
+        axisLabel: periodAxisLabel(currentPeriod, k, g.repDate),
+        value: g.profit,
+        tooltip: `<b>${periodFullLabel(currentPeriod, k, g.repDate)}</b><br>손익 ${fmt(g.profit)}<br>${g.count}건 · 승률 ${wr}%`
+      };
+    });
+    drawBarChart('periodCanvas', bars);
+
+    const tbl = document.getElementById('weekTable');
+    const periodLabel = currentPeriod === 'month' ? '월' : '주차';
+    let html = `<tr><th>${periodLabel}</th><th>거래</th><th>승률</th><th>손익</th></tr>`;
+    keys.slice().reverse().forEach(k=>{
+      const g = groups[k];
+      const wr = (g.wins/g.count*100).toFixed(0);
+      const cls = g.profit>=0 ? 'style="color:var(--profit)"' : 'style="color:var(--loss)"';
+      const label = currentPeriod === 'month' ? `${k} (${g.repDate.getMonth()+1}월)` : k;
+      html += `<tr><td>${label}</td><td>${g.count}</td><td>${wr}%</td><td ${cls}>${fmt(g.profit)}</td></tr>`;
+    });
+    tbl.innerHTML = html;
+  }
+
+  function setupPeriodToggle(){
+    const btns = document.querySelectorAll('.toggle-btn');
+    btns.forEach(btn=>{
+      btn.classList.toggle('active', btn.dataset.period === currentPeriod);
+      btn.onclick = () => {
+        currentPeriod = btn.dataset.period;
+        btns.forEach(b=>b.classList.toggle('active', b===btn));
+        renderPeriodView();
+      };
+    });
+  }
+
+  // Generic bar chart used for both the period breakdown and the symbol breakdown.
+  // bars: [{ axisLabel, value, tooltip (HTML string) }]
+  // Bars are colored green/red per value, with rotated labels for narrow mobile widths,
+  // and a shared pointer-driven tooltip that shows on hover/tap.
+  function drawBarChart(canvasId, bars){
+    const canvas = document.getElementById(canvasId);
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth, h = 150;
+    canvas.width = w*dpr; canvas.height = h*dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr,dpr);
+    ctx.clearRect(0,0,w,h);
+
+    if(bars.length === 0){
+      ctx.fillStyle = '#687975'; ctx.font = '12px monospace';
+      ctx.fillText('데이터가 부족합니다', 10, h/2);
+      canvas._bars = [];
+      return;
+    }
+
+    const padTop = 8, padBottom = 34, padSide = 6;
+    const chartH = h - padTop - padBottom;
+    const maxAbs = Math.max(1, ...bars.map(b=>Math.abs(b.value)));
+    const zeroY = padTop + chartH/2;
+    const gap = (w - padSide*2) / bars.length;
+    const barW = Math.max(2, gap * 0.65);
+
+    const hitRects = [];
+
+    bars.forEach((bar,i)=>{
+      const v = bar.value;
+      const barH = (Math.abs(v)/maxAbs) * (chartH/2);
+      const x = padSide + i*gap + (gap-barW)/2;
+      ctx.fillStyle = v>=0 ? '#1a9c5c' : '#d6483f';
+      if(v>=0) ctx.fillRect(x, zeroY-barH, barW, barH);
+      else ctx.fillRect(x, zeroY, barW, barH);
+
+      // full-height hit area (not just the bar's pixel height) so hover/tap is easy on mobile
+      hitRects.push({ x: padSide + i*gap, w: gap, tooltip: bar.tooltip });
+
+      // sparse labels to avoid overlap on mobile
+      const skip = Math.ceil(bars.length/8);
+      if(i % skip === 0){
+        ctx.save();
+        ctx.translate(x+barW/2, zeroY + chartH/2 + 14);
+        ctx.rotate(-Math.PI/4);
+        ctx.fillStyle = '#687975';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(bar.axisLabel, 0, 0);
+        ctx.restore();
+      }
+    });
+
+    ctx.strokeStyle = 'rgba(24,36,34,0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padSide, zeroY); ctx.lineTo(w-padSide, zeroY);
+    ctx.stroke();
+
+    canvas._bars = hitRects;
+    bindChartTooltip(canvas);
+  }
+
+  // Attach shared pointer-driven tooltip behavior to a chart canvas, once.
+  function bindChartTooltip(canvas){
+    if(canvas._tooltipBound) return;
+    canvas._tooltipBound = true;
+    const tooltipEl = document.getElementById('chartTooltip');
+
+    function showAt(clientX, clientY){
+      const rect = canvas.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const bar = (canvas._bars || []).find(b => x >= b.x && x <= b.x + b.w);
+      if(bar){
+        tooltipEl.innerHTML = bar.tooltip;
+        tooltipEl.style.opacity = '1';
+        tooltipEl.style.left = clientX + 'px';
+        tooltipEl.style.top = (clientY - 14) + 'px';
+      } else {
+        tooltipEl.style.opacity = '0';
+      }
+    }
+    function hide(){ tooltipEl.style.opacity = '0'; }
+
+    canvas.addEventListener('pointermove', e => showAt(e.clientX, e.clientY));
+    canvas.addEventListener('pointerdown', e => showAt(e.clientX, e.clientY));
+    canvas.addEventListener('pointerleave', hide);
+  }
+
+  function renderSymbolChart(){
+    const groups = {};
+    trades.forEach(t=>{
+      if(!groups[t.symbol]) groups[t.symbol] = {profit:0,count:0,wins:0};
+      groups[t.symbol].profit += t.profit;
+      groups[t.symbol].count += 1;
+      if(t.profit>0) groups[t.symbol].wins += 1;
+    });
+    const sorted = Object.entries(groups).sort((a,b)=>b[1].profit-a[1].profit);
+    const bars = sorted.map(([sym,g])=>{
+      const wr = (g.wins/g.count*100).toFixed(0);
+      return {
+        axisLabel: sym,
+        value: g.profit,
+        tooltip: `<b>${sym}</b><br>손익 ${fmt(g.profit)}<br>${g.count}건 · 승률 ${wr}%`
+      };
+    });
+    drawBarChart('symbolCanvas', bars);
+  }
+
+  function renderSymbolList(){
+    const groups = {};
+    trades.forEach(t=>{
+      if(!groups[t.symbol]) groups[t.symbol] = {profit:0,count:0,wins:0};
+      groups[t.symbol].profit += t.profit;
+      groups[t.symbol].count += 1;
+      if(t.profit>0) groups[t.symbol].wins += 1;
+    });
+    const list = document.getElementById('symbolList');
+    list.innerHTML = Object.entries(groups)
+      .sort((a,b)=>b[1].profit-a[1].profit)
+      .map(([sym,g])=>{
+        const wr = (g.wins/g.count*100).toFixed(0);
+        const cls = g.profit>=0?'up':'down';
+        return `<div class="symbol-row">
+          <div><div class="symbol-name">${sym}</div><div class="symbol-meta">${g.count}건 · 승률 ${wr}%</div></div>
+          <div class="symbol-pnl ${cls==='up'?'':'' }" style="color:${g.profit>=0?'var(--profit)':'var(--loss)'}">${fmt(g.profit)}</div>
+        </div>`;
+      }).join('');
+  }
+
+  // ---------- Claude API summary ----------
+  const apiKeyInput = document.getElementById('apiKeyInput');
+  const savedKey = localStorage.getItem('claude_api_key');
+  if(savedKey) apiKeyInput.value = savedKey;
+
+  document.getElementById('saveKeyBtn').addEventListener('click', ()=>{
+    localStorage.setItem('claude_api_key', apiKeyInput.value.trim());
+    alert('저장되었습니다.');
+  });
+
+  document.getElementById('genSummaryBtn').addEventListener('click', async ()=>{
+    const key = apiKeyInput.value.trim();
+    const output = document.getElementById('summaryOutput');
+    if(!key){ alert('Claude API 키를 입력해주세요.'); return; }
+    if(trades.length === 0){ alert('먼저 거래 내역을 업로드해주세요.'); return; }
+
+    output.innerHTML = `<div class="summary-output"><span class="loading-dot">분석 중입니다...</span></div>`;
+
+    const groups = {};
+    trades.forEach(t=>{
+      if(!groups[t.symbol]) groups[t.symbol] = {profit:0,count:0,wins:0};
+      groups[t.symbol].profit += t.profit;
+      groups[t.symbol].count += 1;
+      if(t.profit>0) groups[t.symbol].wins += 1;
+    });
+    const wins = trades.filter(t=>t.profit>0);
+    const losses = trades.filter(t=>t.profit<0);
+    const totalProfit = trades.reduce((s,t)=>s+t.profit,0);
+
+    const statsPayload = {
+      기간: `${trades[0].time.toISOString().slice(0,10)} ~ ${trades[trades.length-1].time.toISOString().slice(0,10)}`,
+      총거래수: trades.length,
+      총손익: totalProfit.toFixed(2),
+      승률: (wins.length/trades.length*100).toFixed(1)+'%',
+      심볼별: Object.fromEntries(Object.entries(groups).map(([s,g])=>[s, {거래수:g.count, 손익:g.profit.toFixed(2), 승률:(g.wins/g.count*100).toFixed(1)+'%'}]))
+    };
+
+    try{
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'x-api-key': key,
+          'anthropic-version':'2023-06-01',
+          'anthropic-dangerous-direct-browser-access':'true'
+        },
+        body: JSON.stringify({
+          model:'claude-sonnet-5',
+          max_tokens: 700,
+          messages:[{
+            role:'user',
+            content: `당신은 개인 트레이더의 전담 트레이딩 코치입니다. 아래는 그리드 트레이딩 전략(NAS100, XAUUSD, JPY 페어)을 자동매매 EA로 운용하는 트레이더의 거래 통계입니다. 이 데이터를 바탕으로 한국어로 400자 내외의 간결한 주간 요약을 작성해주세요. 다음을 포함하세요: (1) 전반적 성과 한 줄 평가, (2) 심볼별로 특별히 잘 되거나 안 된 부분, (3) 눈에 띄는 리스크 신호(예: 특정 심볼 손실 집중, 승률 대비 낮은 손익비 등)가 있다면 지적, (4) 다음 주에 점검해볼 만한 실질적 제안 1~2개. 과장하지 말고 담백하게, 데이터에 근거해서만 이야기하세요.\\n\\n통계 데이터:\\n${JSON.stringify(statsPayload, null, 2)}`
+          }]
+        })
+      });
+      if(!resp.ok){
+        const errText = await resp.text();
+        throw new Error(`API 오류 (${resp.status}): ${errText.slice(0,200)}`);
+      }
+      const data = await resp.json();
+      const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
+      output.innerHTML = `<div class="summary-output">${text.replace(/</g,'&lt;')}</div>`;
+    }catch(err){
+      output.innerHTML = `<div class="summary-output" style="border-left-color:var(--loss);color:var(--loss);">요약 생성 실패: ${err.message}</div>`;
+    }
+  });
+
+  // ---------- Cloud sync via GitHub Gist ----------
+  // Lets the person upload the MT5 report once on any device, then load the parsed
+  // result on other devices without re-uploading the raw file. Stores a JSON snapshot
+  // of the already-parsed trades/cashflows/summary in a private Gist.
+  const GIST_FILENAME = 'trading-report-data.json';
+  const getGistToken = () => localStorage.getItem('github_gist_token') || '';
+  const getGistId = () => localStorage.getItem('github_gist_id') || '';
+
+  const gistTokenInput = document.getElementById('gistTokenInput');
+  const gistStatus = document.getElementById('gistStatus');
+  if(getGistToken()) gistTokenInput.value = getGistToken();
+
+  document.getElementById('saveTokenBtn').addEventListener('click', ()=>{
+    const v = gistTokenInput.value.trim();
+    if(!v){
+      gistStatus.textContent = '입력창이 비어있어요. 토큰을 붙여넣은 뒤 다시 눌러주세요.';
+      return;
+    }
+    localStorage.setItem('github_gist_token', v);
+    gistStatus.textContent = `토큰이 저장되었습니다 (${v.slice(0,4)}...${v.slice(-4)}).`;
+  });
+
+  async function saveToGist(){
+    const token = getGistToken();
+    if(!token){ alert('먼저 GitHub 토큰을 입력하고 저장해주세요.'); return; }
+    if(trades.length === 0){ alert('저장할 리포트 데이터가 없습니다. 먼저 MT5 리포트를 업로드해주세요.'); return; }
+    gistStatus.textContent = '클라우드에 저장 중...';
+    const payload = {
+      savedAt: new Date().toISOString(),
+      trades: trades.map(t=>({ time:t.time.toISOString(), symbol:t.symbol, type:t.type, volume:t.volume, price:t.price, profit:t.profit, commission:t.commission, swap:t.swap })),
+      cashFlows: lastCashFlows.map(f=>({ time:f.time.toISOString(), amount:f.amount, comment:f.comment, group:f.group, subtype:f.subtype })),
+      officialSummary: lastOfficialSummary
+    };
+    const body = {
+      description: 'TradingPerformanceReport data (auto-synced, private)',
+      public: false,
+      files: { [GIST_FILENAME]: { content: JSON.stringify(payload) } }
+    };
+    try{
+      const gistId = getGistId();
+      const resp = await fetch(
+        gistId ? `https://api.github.com/gists/${gistId}` : 'https://api.github.com/gists',
+        {
+          method: gistId ? 'PATCH' : 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        }
+      );
+      if(!resp.ok){
+        const errText = await resp.text();
+        throw new Error(`${resp.status} — ${errText.slice(0,150)}`);
+      }
+      const data = await resp.json();
+      localStorage.setItem('github_gist_id', data.id);
+      gistStatus.textContent = `저장 완료 (${new Date().toLocaleString('ko-KR')})`;
+    }catch(err){
+      gistStatus.textContent = `저장 실패: ${err.message}`;
+    }
+  }
+
+  // Finds our data gist by scanning the account's gist list for one containing our
+  // known filename — this lets a brand-new device locate the gist using only the
+  // token, without needing the gist ID to already be cached locally.
+  async function findGistId(token){
+    let page = 1;
+    while(page <= 5){ // up to 500 gists, more than enough for a personal account
+      const resp = await fetch(`https://api.github.com/gists?per_page=100&page=${page}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if(!resp.ok) throw new Error(`${resp.status}`);
+      const list = await resp.json();
+      if(list.length === 0) break;
+      const found = list.find(g => g.files && g.files[GIST_FILENAME]);
+      if(found) return found.id;
+      if(list.length < 100) break;
+      page++;
+    }
+    return null;
+  }
+
+  async function loadFromGist(silent){
+    const token = getGistToken();
+    if(!token){
+      if(!silent) gistStatus.textContent = '먼저 GitHub 토큰을 입력하고 저장해주세요.';
+      return false;
+    }
+    gistStatus.textContent = '클라우드에서 불러오는 중...';
+    try{
+      let gistId = getGistId();
+      if(!gistId){
+        gistId = await findGistId(token);
+        if(gistId) localStorage.setItem('github_gist_id', gistId);
+      }
+      if(!gistId){
+        if(!silent) gistStatus.textContent = '저장된 클라우드 데이터가 없어요. 먼저 다른 기기에서 리포트를 업로드하고 "☁️ 지금 저장"을 눌러주세요.';
+        else gistStatus.textContent = '';
+        return false;
+      }
+      const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if(!resp.ok) throw new Error(`${resp.status}`);
+      const data = await resp.json();
+      const file = data.files && data.files[GIST_FILENAME];
+      if(!file) throw new Error('저장된 파일을 찾을 수 없습니다');
+      const payload = JSON.parse(file.content);
+      trades = payload.trades.map(t=>({ ...t, time: new Date(t.time) })).sort((a,b)=>a.time-b.time);
+      lastCashFlows = (payload.cashFlows || []).map(f=>({ ...f, time: new Date(f.time) }));
+      lastOfficialSummary = payload.officialSummary || null;
+      render();
+      gistStatus.textContent = `불러오기 완료 (저장 시각: ${new Date(payload.savedAt).toLocaleString('ko-KR')})`;
+      return true;
+    }catch(err){
+      gistStatus.textContent = `불러오기 실패: ${err.message}`;
+      return false;
+    }
+  }
+
+  document.getElementById('saveToGistBtn').addEventListener('click', ()=>saveToGist());
+  document.getElementById('loadFromGistBtn').addEventListener('click', ()=>loadFromGist(false));
+
+  // On page open, if a token + gist id are already saved in this browser, load automatically
+  // so the person doesn't have to re-upload the file on every device.
+  if(getGistToken()) loadFromGist(true);
+
+})();
+</script>
+</body>
+</html>
