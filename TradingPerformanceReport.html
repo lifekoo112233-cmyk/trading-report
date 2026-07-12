@@ -407,7 +407,7 @@
     for(let i=1;i<positionsSection.rows.length;i++){
       const cells = visibleCells(positionsSection.rows[i]).map(c=>c.textContent.trim());
       if(cells.length < 13) continue;
-      const [openTimeStr, , symbolRaw, typeStr, volStr, , , , closeTimeStr, closePriceStr, commStr, swapStr, profitStr] = cells;
+      const [openTimeStr, posId, symbolRaw, typeStr, volStr, , , , closeTimeStr, closePriceStr, commStr, swapStr, profitStr] = cells;
       if(!/buy|sell/i.test(typeStr)) continue;
       const grossProfit = toNumber(profitStr);
       if(grossProfit === null) continue;
@@ -416,6 +416,7 @@
       const commission = toNumber(commStr) || 0;
       const swap = toNumber(swapStr) || 0;
       out.push({
+        posId: posId || null,
         time: closeTime,
         openTime: parseMt5Time(openTimeStr),
         symbol: symbolRaw.replace(/\+$/,''),
@@ -443,7 +444,7 @@
       const amount = toNumber(cells[11]);
       const comment = cells[13] || '(설명 없음)';
       if(!time || amount === null) continue;
-      out.push({ time, amount, comment, ...classifyCashFlow(comment) });
+      out.push({ dealId: cells[1] || null, time, amount, comment, ...classifyCashFlow(comment) });
     }
     return out;
   }
@@ -1293,6 +1294,8 @@
   // result on other devices without re-uploading the raw file. Stores a JSON snapshot
   // of the already-parsed trades/cashflows/summary in a private Gist.
   const GIST_FILENAME = 'trading-report-data.json';
+  const LIVE_GIST_FILENAME = 'trading-report-live.json'; // written directly by the MT5 EA
+  const LIVE_CASHFLOW_FILENAME = 'trading-report-cashflow-live.json'; // deposits/withdrawals/promos, also from the EA
   const getGistToken = () => localStorage.getItem('github_gist_token') || '';
   const getGistId = () => localStorage.getItem('github_gist_id') || '';
 
@@ -1317,14 +1320,20 @@
     gistStatus.textContent = '클라우드에 저장 중...';
     const payload = {
       savedAt: new Date().toISOString(),
-      trades: trades.map(t=>({ time:t.time.toISOString(), symbol:t.symbol, type:t.type, volume:t.volume, price:t.price, profit:t.profit, commission:t.commission, swap:t.swap })),
-      cashFlows: lastCashFlows.map(f=>({ time:f.time.toISOString(), amount:f.amount, comment:f.comment, group:f.group, subtype:f.subtype })),
+      trades: trades.map(t=>({ posId:t.posId||null, time:t.time.toISOString(), symbol:t.symbol, type:t.type, volume:t.volume, price:t.price, profit:t.profit, commission:t.commission, swap:t.swap })),
+      cashFlows: lastCashFlows.map(f=>({ dealId:f.dealId||null, time:f.time.toISOString(), amount:f.amount, comment:f.comment, group:f.group, subtype:f.subtype })),
       officialSummary: lastOfficialSummary
     };
     const body = {
       description: 'TradingPerformanceReport data (auto-synced, private)',
       public: false,
-      files: { [GIST_FILENAME]: { content: JSON.stringify(payload) } }
+      files: {
+        [GIST_FILENAME]: { content: JSON.stringify(payload) },
+        // 전체 스냅샷에 지금까지의 모든 거래/입출금이 이미 흡수됐으므로, EA가 계속
+        // 쌓아온 실시간 파일들은 여기서 비워서 새로 시작한다. (안 비우면 계속 커지기만 함)
+        [LIVE_GIST_FILENAME]: { content: '[]' },
+        [LIVE_CASHFLOW_FILENAME]: { content: '[]' }
+      }
     };
     try{
       const gistId = getGistId();
@@ -1342,7 +1351,7 @@
       }
       const data = await resp.json();
       localStorage.setItem('github_gist_id', data.id);
-      gistStatus.textContent = `저장 완료 (${new Date().toLocaleString('ko-KR')})`;
+      gistStatus.textContent = `저장 완료 (${new Date().toLocaleString('ko-KR')}) · EA 실시간 파일 초기화됨`;
     }catch(err){
       gistStatus.textContent = `저장 실패: ${err.message}`;
     }
@@ -1394,11 +1403,50 @@
       const file = data.files && data.files[GIST_FILENAME];
       if(!file) throw new Error('저장된 파일을 찾을 수 없습니다');
       const payload = JSON.parse(file.content);
-      trades = payload.trades.map(t=>({ ...t, time: new Date(t.time) })).sort((a,b)=>a.time-b.time);
-      lastCashFlows = (payload.cashFlows || []).map(f=>({ ...f, time: new Date(f.time) }));
+      const baseTrades = payload.trades.map(t=>({ ...t, time: new Date(t.time) }));
+
+      // If an EA is pushing live trades to the same gist (a separate file, since it
+      // doesn't rewrite the full history each time), merge them in — deduping by
+      // position id so a later full re-upload from the browser doesn't double-count
+      // trades the EA already pushed.
+      let liveCount = 0;
+      const liveFile = data.files && data.files[LIVE_GIST_FILENAME];
+      if(liveFile){
+        try{
+          const liveArr = JSON.parse(liveFile.content);
+          const seen = new Set(baseTrades.filter(t=>t.posId).map(t=>t.posId));
+          const newLive = liveArr
+            .map(t=>({ ...t, time: new Date(t.time) }))
+            .filter(t=> !(t.posId && seen.has(t.posId)));
+          baseTrades.push(...newLive);
+          liveCount = newLive.length;
+        }catch(e){ /* malformed or empty live file — ignore, base data still loads fine */ }
+      }
+
+      trades = baseTrades.sort((a,b)=>a.time-b.time);
+
+      const baseCashFlows = (payload.cashFlows || []).map(f=>({ ...f, time: new Date(f.time) }));
+      let liveCashCount = 0;
+      const liveCashFile = data.files && data.files[LIVE_CASHFLOW_FILENAME];
+      if(liveCashFile){
+        try{
+          const liveArr = JSON.parse(liveCashFile.content);
+          const seenDeals = new Set(baseCashFlows.filter(f=>f.dealId).map(f=>f.dealId));
+          const newLiveCash = liveArr
+            .filter(f=> !(f.dealId && seenDeals.has(f.dealId)))
+            .map(f=>({ dealId:f.dealId||null, time:new Date(f.time), amount:f.amount, comment:f.comment, ...classifyCashFlow(f.comment) }));
+          baseCashFlows.push(...newLiveCash);
+          liveCashCount = newLiveCash.length;
+        }catch(e){ /* malformed or empty live cashflow file — ignore, base data still loads fine */ }
+      }
+      lastCashFlows = baseCashFlows;
+
       lastOfficialSummary = payload.officialSummary || null;
       render();
-      gistStatus.textContent = `불러오기 완료 (저장 시각: ${new Date(payload.savedAt).toLocaleString('ko-KR')})`;
+      const liveParts = [];
+      if(liveCount) liveParts.push(`거래 ${liveCount}건`);
+      if(liveCashCount) liveParts.push(`입출금 ${liveCashCount}건`);
+      gistStatus.textContent = `불러오기 완료 (저장 시각: ${new Date(payload.savedAt).toLocaleString('ko-KR')})` + (liveParts.length ? ` · EA 실시간 ${liveParts.join(', ')} 반영` : '');
       return true;
     }catch(err){
       gistStatus.textContent = `불러오기 실패: ${err.message}`;
