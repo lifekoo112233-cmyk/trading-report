@@ -56,10 +56,12 @@
   .upload-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
   .upload-hint{color:var(--text-dim);font-size:11px;}
   .upload-zone input{display:none;}
+  .row-divider{width:1px;align-self:stretch;background:var(--border);margin:2px 2px;}
   .btn{display:inline-block;background:var(--amber-bg);color:#3a2405;font-weight:600;font-family:var(--font-display);border:none;border-radius:8px;padding:10px 18px;font-size:14px;cursor:pointer;}
   .btn.ghost{background:transparent;color:var(--text);border:1px solid var(--border);}
   .btn.ghost.active{background:var(--amber-bg);color:#3a2405;border-color:var(--amber-bg);}
   .btn.small{padding:7px 12px;font-size:12px;}
+  .btn.icon{padding:7px 10px;}
   .btn:active{opacity:0.8;}
   textarea.paste-area{width:100%;min-height:90px;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:10px;margin-top:10px;resize:vertical;}
 
@@ -129,26 +131,26 @@
     <div class="upload-row">
       <button class="btn small" onclick="document.getElementById('fileInput').click()">📁 파일 선택</button>
       <button class="btn ghost small" id="pasteToggle">붙여넣기</button>
-      <span class="upload-hint">MT5 이력(History) → Report 저장(HTML) 또는 CSV</span>
+      <span class="row-divider"></span>
+      <button class="btn small" id="saveToGistBtn">☁️ 지금 저장</button>
+      <button class="btn ghost small" id="loadFromGistBtn">🔄 불러오기</button>
+      <button class="btn ghost small icon" id="gistSettingsToggle" title="GitHub 토큰 설정">⚙️</button>
     </div>
     <input type="file" id="fileInput" accept=".html,.htm,.csv,.txt">
     <textarea class="paste-area" id="pasteArea" style="display:none;" placeholder="MT5 리포트 HTML 또는 CSV 원본을 여기에 붙여넣으세요"></textarea>
     <div id="pasteBtnWrap" style="display:none;margin-top:8px;">
       <button class="btn small" id="pasteParseBtn">붙여넣은 내용 분석</button>
     </div>
-  </div>
+    <div class="upload-hint" style="margin-top:8px;">MT5 이력(History) → Report 저장(HTML) 또는 CSV</div>
 
-  <div class="card">
-    <h2>☁️ 클라우드 동기화 (GitHub Gist)</h2>
-    <div class="api-row">
-      <input type="password" id="gistTokenInput" placeholder="GitHub Personal Access Token (gist 권한)">
-      <button class="btn small" id="saveTokenBtn">저장</button>
+    <div id="gistSettingsPanel" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+      <div class="api-row">
+        <input type="password" id="gistTokenInput" placeholder="GitHub Personal Access Token (gist 권한)">
+        <button class="btn small" id="saveTokenBtn">저장</button>
+      </div>
+      <div class="hint">토큰을 저장하면, 한 기기에서 업로드한 리포트를 다른 기기에서 파일 없이 바로 불러올 수 있어요. 토큰은 이 브라우저에만 저장됩니다.</div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:8px;">
-      <button class="btn small" id="saveToGistBtn">☁️ 지금 저장</button>
-      <button class="btn ghost small" id="loadFromGistBtn">🔄 불러오기</button>
-    </div>
-    <div class="hint" id="gistStatus">토큰을 저장하면, 한 기기에서 업로드한 리포트를 다른 기기에서 파일 없이 바로 불러올 수 있어요. 토큰은 이 브라우저에만 저장됩니다.</div>
+    <div class="hint" id="gistStatus"></div>
   </div>
 
   <div class="view-tabs" id="viewTabs" style="display:none;">
@@ -317,6 +319,12 @@
     syncKRWButtons();
     await renderCashflowView();
     renderMetricGrid();
+  });
+
+  // Gist token settings panel (collapsed by default, toggled via the ⚙️ button)
+  document.getElementById('gistSettingsToggle').addEventListener('click', ()=>{
+    const panel = document.getElementById('gistSettingsPanel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
   });
 
   function readFile(file){
@@ -698,8 +706,15 @@
     btns.forEach(btn=>{
       btn.onclick = () => {
         btns.forEach(b=>b.classList.toggle('active', b===btn));
-        document.getElementById('viewPerformance').style.display = btn.dataset.view === 'performance' ? 'block' : 'none';
-        document.getElementById('viewCashflow').style.display = btn.dataset.view === 'cashflow' ? 'block' : 'none';
+        const isPerf = btn.dataset.view === 'performance';
+        document.getElementById('viewPerformance').style.display = isPerf ? 'block' : 'none';
+        document.getElementById('viewCashflow').style.display = isPerf ? 'none' : 'block';
+        // The cashflow charts are drawn onto <canvas> elements sized by their CSS width.
+        // While the cashflow tab is hidden (display:none) that width reads as 0, so any
+        // draw that happened while hidden produces a blank chart. Redraw now that the
+        // tab is actually visible and has a real width, so it appears filled immediately
+        // instead of only after the person taps "원화 환산 보기".
+        if(!isPerf) renderCashflowView();
       };
     });
   }
