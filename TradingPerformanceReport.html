@@ -1328,10 +1328,57 @@
     gistStatus.textContent = `토큰이 저장되었습니다 (${v.slice(0,4)}...${v.slice(-4)}).`;
   });
 
+  // "지금 저장"은 베이스 스냅샷을 새로 쓰면서 EA의 실시간 파일들을 [](빈 배열)로
+  // 리셋한다. 만약 이 브라우저 탭이 예전에 불러온 채로 오래 열려있었고, 그 사이
+  // EA가 새 거래를 실시간 파일에 계속 추가해왔다면, 그 새 거래들은 지금 이
+  // 브라우저의 trades 변수엔 없는 상태 — 그대로 저장을 누르면 베이스에도 못 들어가고
+  // 동시에 실시간 파일도 비워지면서 통째로 유실된다. 저장 직전에 최신 실시간 파일을
+  // 한 번 더 가져와 병합해서, 저장이 곧 "그 시점까지의 모든 데이터를 안전하게
+  // 보존"하도록 만든다.
+  async function mergeFreshLiveDataBeforeSave(token, gistId){
+    if(!gistId) return; // 첫 저장이면 아직 실시간 파일이 있을 수 없으니 건너뜀
+    try{
+      const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if(!resp.ok) return; // 조회 실패해도 저장 자체는 막지 않음 (기존 로컬 데이터로 진행)
+      const data = await resp.json();
+
+      const liveFile = data.files && data.files[LIVE_GIST_FILENAME];
+      if(liveFile){
+        try{
+          const liveArr = JSON.parse(liveFile.content);
+          const seen = new Set(trades.filter(t=>t.posId).map(t=>t.posId));
+          const newLive = liveArr
+            .map(t=>({ ...t, time: new Date(t.time) }))
+            .filter(t=> !(t.posId && seen.has(t.posId)));
+          if(newLive.length) trades = trades.concat(newLive).sort((a,b)=>a.time-b.time);
+        }catch(e){ /* 실시간 파일이 비어있거나 손상 — 무시하고 로컬 데이터로 진행 */ }
+      }
+
+      const liveCashFile = data.files && data.files[LIVE_CASHFLOW_FILENAME];
+      if(liveCashFile){
+        try{
+          const liveArr = JSON.parse(liveCashFile.content);
+          const seenDeals = new Set(lastCashFlows.filter(f=>f.dealId).map(f=>f.dealId));
+          const newLiveCash = liveArr
+            .filter(f=> !(f.dealId && seenDeals.has(f.dealId)))
+            .map(f=>({ dealId:f.dealId||null, time:new Date(f.time), amount:f.amount, comment:f.comment, ...classifyCashFlow(f.comment) }));
+          if(newLiveCash.length) lastCashFlows = lastCashFlows.concat(newLiveCash);
+        }catch(e){ /* 실시간 파일이 비어있거나 손상 — 무시하고 로컬 데이터로 진행 */ }
+      }
+    }catch(e){ /* 네트워크 문제 등 — 최선을 다했으니 로컬 데이터로 진행 */ }
+  }
+
   async function saveToGist(){
     const token = getGistToken();
     if(!token){ alert('먼저 GitHub 토큰을 입력하고 저장해주세요.'); return; }
     if(trades.length === 0){ alert('저장할 리포트 데이터가 없습니다. 먼저 MT5 리포트를 업로드해주세요.'); return; }
+
+    gistStatus.textContent = 'EA가 그 사이 보낸 최신 거래 확인 중...';
+    await mergeFreshLiveDataBeforeSave(token, getGistId());
+    render(); // 병합된 최신 거래를 화면에도 바로 반영
+
     gistStatus.textContent = '클라우드에 저장 중...';
     const payload = {
       savedAt: new Date().toISOString(),
@@ -1475,6 +1522,15 @@
   // On page open, if a token + gist id are already saved in this browser, load automatically
   // so the person doesn't have to re-upload the file on every device.
   if(getGistToken()) loadFromGist(true);
+
+  // The page only pulls Gist data once, on open — it does NOT auto-refresh while the
+  // tab just sits there, so a tab left open for hours will keep showing stale data even
+  // though the EA has been pushing new trades in the background. Re-pull whenever the
+  // tab becomes visible again (switching back to it, or unlocking the phone), so the
+  // person sees up-to-date numbers without needing to tap "불러오기" every time.
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'visible' && getGistToken()) loadFromGist(true);
+  });
 
 })();
 </script>
