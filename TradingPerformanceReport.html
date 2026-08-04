@@ -321,10 +321,23 @@
     renderMetricGrid();
   });
 
-  // Gist token settings panel (collapsed by default, toggled via the ⚙️ button)
+  // GitHub 토큰 입력: 커스텀 입력창은 일부 모바일 화면에서 테두리가 배경과 거의
+  // 구분 안 돼 "입력할 곳이 안 보인다"는 혼란을 일으켰다. 브라우저 기본 팝업창
+  // (window.prompt)은 기기/화면 크기와 무관하게 항상 또렷하게 뜨고, 붙여넣기도
+  // 길게 눌러 바로 되므로 이 방식으로 대체한다.
   document.getElementById('gistSettingsToggle').addEventListener('click', ()=>{
-    const panel = document.getElementById('gistSettingsPanel');
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    const existing = localStorage.getItem('github_gist_token') || '';
+    const input = window.prompt('GitHub Personal Access Token을 붙여넣어주세요 (gist 권한 필요):', existing);
+    if(input === null) return; // 취소
+    const v = input.trim();
+    if(!v){
+      document.getElementById('gistStatus').textContent = '입력이 비어있어 저장하지 않았습니다.';
+      return;
+    }
+    localStorage.setItem('github_gist_token', v);
+    const tokenField = document.getElementById('gistTokenInput');
+    if(tokenField) tokenField.value = v;
+    document.getElementById('gistStatus').textContent = `토큰이 저장되었습니다 (${v.slice(0,4)}...${v.slice(-4)}).`;
   });
 
   function readFile(file){
