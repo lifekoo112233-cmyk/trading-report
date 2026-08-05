@@ -1405,10 +1405,12 @@
       public: false,
       files: {
         [GIST_FILENAME]: { content: JSON.stringify(payload) },
-        // 전체 스냅샷에 지금까지의 모든 거래/입출금이 이미 흡수됐으므로, EA가 계속
-        // 쌓아온 실시간 파일들은 여기서 비워서 새로 시작한다. (안 비우면 계속 커지기만 함)
-        [LIVE_GIST_FILENAME]: { content: '[]' },
-        [LIVE_CASHFLOW_FILENAME]: { content: '[]' }
+        // 더 이상 여기서 비우지 않는다. "베이스 vs EA 실시간" 두 파일을 따로 두고 매번
+        // 합쳤다 지웠다 하던 방식이 데이터 유실/경쟁 상태의 근원이었다. 이제 실시간
+        // 파일도 방금 병합해서 확정한 전체 거래 목록과 항상 동일하게 맞춰 쓴다 —
+        // 즉 "지우는 단계" 자체를 없애고, 두 파일이 항상 같은 하나의 진실을 가리키게 한다.
+        [LIVE_GIST_FILENAME]: { content: JSON.stringify(payload.trades) },
+        [LIVE_CASHFLOW_FILENAME]: { content: JSON.stringify(payload.cashFlows) }
       }
     };
     try{
@@ -1427,7 +1429,7 @@
       }
       const data = await resp.json();
       localStorage.setItem('github_gist_id', data.id);
-      gistStatus.textContent = `저장 완료 (${new Date().toLocaleString('ko-KR')}) · EA 실시간 파일 초기화됨`;
+      gistStatus.textContent = `저장 완료 (${new Date().toLocaleString('ko-KR')})`;
     }catch(err){
       gistStatus.textContent = `저장 실패: ${err.message}`;
     }
