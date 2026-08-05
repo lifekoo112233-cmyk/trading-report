@@ -1351,8 +1351,9 @@
   async function mergeFreshLiveDataBeforeSave(token, gistId){
     if(!gistId) return; // 첫 저장이면 아직 실시간 파일이 있을 수 없으니 건너뜀
     try{
-      const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const resp = await fetch(`https://api.github.com/gists/${gistId}?_=${Date.now()}`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Cache-Control': 'no-cache' },
+        cache: 'no-store'
       });
       if(!resp.ok) return; // 조회 실패해도 저장 자체는 막지 않음 (기존 로컬 데이터로 진행)
       const data = await resp.json();
@@ -1439,7 +1440,8 @@
     let page = 1;
     while(page <= 5){ // up to 500 gists, more than enough for a personal account
       const resp = await fetch(`https://api.github.com/gists?per_page=100&page=${page}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${token}` },
+        cache: 'no-store'
       });
       if(!resp.ok) throw new Error(`${resp.status}`);
       const list = await resp.json();
@@ -1470,8 +1472,13 @@
         else gistStatus.textContent = '';
         return false;
       }
-      const resp = await fetch(`https://api.github.com/gists/${gistId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      // 모바일 브라우저(또는 통신사/광고차단 앱 등 중간 프록시)가 이 요청을 캐싱해서
+      // 계속 예전 응답을 재사용하는 경우가 있었다. cache:'no-store'로 브라우저 자체
+      // 캐시를 끄고, 매번 다른 쿼리 문자열을 붙여 URL 기반으로 캐싱하는 중간 계층도
+      // 우회한다.
+      const resp = await fetch(`https://api.github.com/gists/${gistId}?_=${Date.now()}`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Cache-Control': 'no-cache' },
+        cache: 'no-store'
       });
       if(!resp.ok) throw new Error(`${resp.status}`);
       const data = await resp.json();
