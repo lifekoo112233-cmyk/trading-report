@@ -325,11 +325,16 @@
   // 구분 안 돼 "입력할 곳이 안 보인다"는 혼란을 일으켰다. 브라우저 기본 팝업창
   // (window.prompt)은 기기/화면 크기와 무관하게 항상 또렷하게 뜨고, 붙여넣기도
   // 길게 눌러 바로 되므로 이 방식으로 대체한다.
+  //
+  // [NEW] 토큰 입력에 이어 Gist ID도 팝업으로 확인/수정할 수 있게 했다. 여러 기기를
+  // 쓰다 보면(특히 토큰 재발급/캐시 문제로 씨름하던 중) 한 기기가 실수로 새 Gist를
+  // 만들어버려서, 기기마다 서로 다른 클라우드 저장소를 보는 사고가 날 수 있다.
+  // 이 팝업으로 모든 기기의 Gist ID를 EA가 실제로 쓰는 ID와 강제로 똑같이 맞출 수 있다.
   document.getElementById('gistSettingsToggle').addEventListener('click', ()=>{
-    const existing = localStorage.getItem('github_gist_token') || '';
-    const input = window.prompt('GitHub Personal Access Token을 붙여넣어주세요 (gist 권한 필요):', existing);
-    if(input === null) return; // 취소
-    const v = input.trim();
+    const existingToken = localStorage.getItem('github_gist_token') || '';
+    const inputToken = window.prompt('GitHub Personal Access Token을 붙여넣어주세요 (gist 권한 필요):', existingToken);
+    if(inputToken === null) return; // 취소
+    const v = inputToken.trim();
     if(!v){
       document.getElementById('gistStatus').textContent = '입력이 비어있어 저장하지 않았습니다.';
       return;
@@ -337,7 +342,23 @@
     localStorage.setItem('github_gist_token', v);
     const tokenField = document.getElementById('gistTokenInput');
     if(tokenField) tokenField.value = v;
-    document.getElementById('gistStatus').textContent = `토큰이 저장되었습니다 (${v.slice(0,4)}...${v.slice(-4)}).`;
+
+    const existingGistId = localStorage.getItem('github_gist_id') || '';
+    const inputGistId = window.prompt(
+      '이 기기가 연결된 Gist ID입니다. 다른 기기(또는 MT5 EA)와 정확히 같은 값인지 확인해주세요.\n' +
+      '다르면 여기서 고쳐서 맞출 수 있습니다. 비워두고 확인을 누르면 자동으로 다시 찾습니다.',
+      existingGistId
+    );
+    if(inputGistId !== null){
+      const gv = inputGistId.trim();
+      if(gv){
+        localStorage.setItem('github_gist_id', gv);
+      } else {
+        localStorage.removeItem('github_gist_id'); // 다음 불러오기/저장 때 계정에서 자동으로 다시 찾음
+      }
+    }
+
+    document.getElementById('gistStatus').textContent = `토큰이 저장되었습니다 (${v.slice(0,4)}...${v.slice(-4)}). Gist ID: ${localStorage.getItem('github_gist_id') || '(자동 검색 예정)'}`;
   });
 
   function readFile(file){
