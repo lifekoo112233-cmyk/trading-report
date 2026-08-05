@@ -1552,6 +1552,14 @@
     if(document.visibilityState === 'visible' && getGistToken()) loadFromGist(true);
   });
 
+  // 탭을 백그라운드로 안 보내고 화면을 계속 켜둔 채로 보고 있으면(다른 기기에서
+  // 방금 "지금 저장"을 눌렀어도) visibilitychange가 안 일어나서 안 갱신된다.
+  // 2분마다 조용히 다시 불러와서, 두 기기 화면이 서로 다른 시각의 스냅샷으로
+  // 오래 벌어져 있지 않도록 한다.
+  setInterval(() => {
+    if(document.visibilityState === 'visible' && getGistToken()) loadFromGist(true);
+  }, 120000);
+
 })();
 </script>
 </body>
