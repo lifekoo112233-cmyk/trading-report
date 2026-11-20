@@ -113,7 +113,12 @@
   table.week-table tr.total-row td{font-weight:700;border-top:2px solid var(--text-dim);background:var(--panel-2);}
 
   .view-tabs{display:flex;gap:8px;margin-bottom:14px;}
-  .view-tabs .toggle-btn{flex:1;padding:10px 14px;font-size:13px;}
+  .view-tabs .toggle-btn{flex:1;padding:10px 4px;font-size:12.5px;white-space:nowrap;}
+  #combTable th, #combTable td{white-space:nowrap;padding-left:8px;}
+  #combTable th:first-child, #combTable td:first-child{position:sticky;left:0;background:var(--panel);z-index:1;padding-left:0;padding-right:8px;}
+  #combTable tr.total-row td:first-child{background:var(--panel-2);}
+  .chart-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--text-dim);margin-bottom:8px;}
+  .chart-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px;}
 
   table.week-table{width:100%;border-collapse:collapse;font-size:12px;}
   table.week-table th{text-align:right;color:var(--text-dim);font-weight:500;padding:6px 4px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;}
@@ -173,6 +178,7 @@
   <div class="view-tabs" id="viewTabs" style="display:none;">
     <button class="toggle-btn active" data-view="performance">📈 성과 리포트</button>
     <button class="toggle-btn" data-view="cashflow">💰 입출금 내역</button>
+    <button class="toggle-btn" data-view="combined">🧾 성과+입출금</button>
   </div>
 
   <div id="resultsArea" style="display:none;">
@@ -274,6 +280,40 @@
 
     </div>
 
+    <div id="viewCombined" style="display:none;">
+
+      <div class="card">
+        <h2>조회 기간</h2>
+        <div class="period-ctl" id="combPeriodCtl"></div>
+      </div>
+
+      <div class="card">
+        <h2>성과 + 입출금 합계</h2>
+        <div class="hint" id="combRange" style="margin:-4px 0 10px;"></div>
+        <div class="metric-grid" id="combSummaryGrid"></div>
+        <div class="hint">합계(잔고 변화) = 거래손익 + 입금 + 출금 + 프로모션<span id="combOtherNote"></span></div>
+      </div>
+
+      <div class="card">
+        <h2><span id="combGrpLabel">월별</span> 비교</h2>
+        <div class="chart-legend">
+          <span><i style="background:#1a9c5c"></i>거래손익</span>
+          <span><i style="background:#3b6fd6"></i>순입출금</span>
+          <span><i style="background:#c97a1f"></i>프로모션</span>
+        </div>
+        <div class="chart-wrap"><canvas id="combCanvas" height="170"></canvas></div>
+      </div>
+
+      <div class="card">
+        <h2><span id="combGrpLabel2">월별</span> 합계표</h2>
+        <div style="overflow-x:auto;">
+          <table class="week-table" id="combTable"></table>
+        </div>
+        <div class="hint">맨 오른쪽 '누적'은 선택한 범위 첫 기간부터 합계를 차례로 더한 값이에요.</div>
+      </div>
+
+    </div>
+
   </div>
 
   <div class="empty-state" id="emptyState">
@@ -322,6 +362,7 @@
     syncKRWButtons();
     await renderCashflowView();
     renderMetricGrid();
+    renderCombinedView();
   }
 
   function syncKRWButtons(){
@@ -344,6 +385,7 @@
     syncKRWButtons();
     await renderCashflowView();
     renderMetricGrid();
+    renderCombinedView();
   });
 
   // GitHub 토큰 입력: 커스텀 입력창은 일부 모바일 화면에서 테두리가 배경과 거의
@@ -871,32 +913,180 @@
     const tickerHtml = tItems.map(i=>`<span class="tick-item"><span class="tick-label">${i.l}</span><span class="tick-val ${i.cls}">${i.v}</span></span>`).join('');
     ticker.innerHTML = tickerHtml + tickerHtml; // duplicate for seamless scroll
 
-    drawEquityCurve(curve, trades.map(t=>t.time));
-    renderPeriodView();
+    lastCurveData = { curve, times: trades.map(t=>t.time) };
+    drawPerformanceCharts();
     renderSymbolList();
-    renderSymbolChart();
 
     document.getElementById('viewTabs').style.display = 'flex';
     renderCashflowView();
+    renderCombinedView();
     setupViewTabs();
   }
 
+  let lastCurveData = null;
+  function drawPerformanceCharts(){
+    if(lastCurveData) drawEquityCurve(lastCurveData.curve, lastCurveData.times);
+    renderPeriodView();
+    renderSymbolChart();
+  }
+
+  const VIEWS = { performance:'viewPerformance', cashflow:'viewCashflow', combined:'viewCombined' };
   function setupViewTabs(){
     const btns = document.querySelectorAll('#viewTabs .toggle-btn');
     btns.forEach(btn=>{
       btn.onclick = () => {
         btns.forEach(b=>b.classList.toggle('active', b===btn));
-        const isPerf = btn.dataset.view === 'performance';
-        document.getElementById('viewPerformance').style.display = isPerf ? 'block' : 'none';
-        document.getElementById('viewCashflow').style.display = isPerf ? 'none' : 'block';
-        // The cashflow charts are drawn onto <canvas> elements sized by their CSS width.
-        // While the cashflow tab is hidden (display:none) that width reads as 0, so any
-        // draw that happened while hidden produces a blank chart. Redraw now that the
-        // tab is actually visible and has a real width, so it appears filled immediately
-        // instead of only after the person taps "원화 환산 보기".
-        if(!isPerf) renderCashflowView();
+        const view = btn.dataset.view;
+        Object.entries(VIEWS).forEach(([k,id])=>{
+          document.getElementById(id).style.display = k === view ? 'block' : 'none';
+        });
+        // 차트는 <canvas>의 CSS 너비로 그려지는데, 숨겨진 탭(display:none)에서는 너비가 0이라
+        // 그 사이에 그려진 차트는 빈 화면이 된다(예: 2분 자동 새로고침이 다른 탭에 있을 때 실행).
+        // 탭이 실제로 보이는 지금 다시 그린다.
+        if(view === 'performance') drawPerformanceCharts();
+        if(view === 'cashflow') renderCashflowView();
+        if(view === 'combined') renderCombinedView();
       };
     });
+  }
+
+  // ---------- 성과 + 입출금 통합 뷰 ----------
+  const combPeriod = { period:'month', start:null, end:null };
+
+  function renderCombinedView(){
+    if(!trades.length && !lastCashFlows.length) return;
+    const rp = resolvePeriod(combPeriod);
+    const g0 = rp.grouping;
+    const tList = trades.filter(t=>rp.inRange(t.time));
+    const fList = lastCashFlows.filter(f=>rp.inRange(f.time));
+
+    const groups = {};
+    const ensure = (key, d) => {
+      if(!groups[key]) groups[key] = { pnl:0, count:0, wins:0, dep:0, wd:0, promo:0, other:0, repDate:d };
+      if(d < groups[key].repDate) groups[key].repDate = d;
+      return groups[key];
+    };
+    tList.forEach(t=>{
+      const g = ensure(periodKeyOf(g0, t.time), t.time);
+      g.pnl += t.profit; g.count += 1; if(t.profit>0) g.wins += 1;
+    });
+    fList.forEach(f=>{
+      const g = ensure(periodKeyOf(g0, f.time), f.time);
+      if(f.group==='deposit') g.dep += f.amount;
+      else if(f.group==='withdraw') g.wd += f.amount;
+      else if(f.group==='promo') g.promo += f.amount;
+      else g.other += f.amount;
+    });
+    const keys = Object.keys(groups).sort();
+    const sumOf = g => g.pnl + g.dep + g.wd + g.promo + g.other;
+
+    // 전체 합계
+    const T = { pnl:0, count:0, wins:0, dep:0, wd:0, promo:0, other:0 };
+    keys.forEach(k=>{ const g = groups[k]; Object.keys(T).forEach(f=>T[f]+=g[f]); });
+    const total = sumOf(T);
+    const hasOther = Math.abs(T.other) > 0.0001;
+
+    document.getElementById('combGrpLabel').textContent = GROUP_NAME[g0];
+    document.getElementById('combGrpLabel2').textContent = GROUP_NAME[g0];
+    const allDates = tList.map(t=>t.time).concat(fList.map(f=>f.time));
+    const r = rangeOfDates(allDates);
+    document.getElementById('combRange').textContent = rp.custom
+      ? `기간설정: ${rp.rangeText}`
+      : (r ? `전체 기간: ${fmtDot(r.min)} ~ ${fmtDot(r.max)} · ${GROUP_NAME[g0]} ${keys.length}${GROUP_UNIT[g0]}` : '');
+    document.getElementById('combOtherNote').textContent = hasOther ? ' + 기타' : '';
+
+    const wr = T.count ? (T.wins/T.count*100).toFixed(1) : '0.0';
+    const net = T.dep + T.wd;
+    const up = v => v>=0 ? 'up' : 'down';
+    document.getElementById('combSummaryGrid').innerHTML = `
+      <div class="metric">${dualAmount(Math.abs(T.pnl), up(T.pnl), T.pnl<0)}<div class="lbl">거래손익 (${T.count}건 · 승률 ${wr}%)</div></div>
+      <div class="metric">${dualAmount(T.promo, 'up', false)}<div class="lbl">프로모션/보너스</div></div>
+      <div class="metric">${dualAmount(T.dep, 'up', false)}<div class="lbl">입금</div></div>
+      <div class="metric">${dualAmount(Math.abs(T.wd), 'down', T.wd<0)}<div class="lbl">출금</div></div>
+      <div class="metric">${dualAmount(Math.abs(net), up(net), net<0)}<div class="lbl">순입출금 (입금+출금)</div></div>
+      <div class="metric" style="outline:2px solid var(--amber-bg);">${dualAmount(Math.abs(total), up(total), total<0)}<div class="lbl"><b>합계 (잔고 변화)</b></div></div>
+    `;
+
+    // 차트: 기간마다 거래손익 / 순입출금 / 프로모션 막대 3개
+    drawGroupedBarChart('combCanvas', keys.map(k=>{
+      const g = groups[k];
+      const n = g.dep + g.wd;
+      return {
+        axisLabel: periodAxisLabel(g0, k, g.repDate),
+        values: [
+          { v: g.pnl, color: g.pnl>=0 ? '#1a9c5c' : '#d6483f' },
+          { v: n, color: '#3b6fd6' },
+          { v: g.promo, color: '#c97a1f' }
+        ],
+        tooltip: `<b>${periodFullLabel(g0, k, g.repDate)}</b><br>거래손익 ${fmt(g.pnl)} (${g.count}건)<br>입금 ${fmt(g.dep)} · 출금 ${fmt(g.wd)}<br>프로모션 ${fmt(g.promo)}${Math.abs(g.other)>0.0001?`<br>기타 ${fmt(g.other)}`:''}<br><b>합계 ${fmt(sumOf(g))}</b>`
+      };
+    }));
+
+    // 표
+    const rate = getActiveRate();
+    const colored = (v, bold) => `<td style="color:${v>0?'var(--profit)':(v<0?'var(--loss)':'var(--text-dim)')};${bold?'font-weight:700;':''}">${cellValue(v, rate)}</td>`;
+    let html = `<tr><th>${GROUP_COL[g0]}</th><th>거래</th><th>거래손익</th><th>입금</th><th>출금</th><th>프로모션</th>${hasOther?'<th>기타</th>':''}<th>합계</th><th>누적</th></tr>`;
+    let running = 0;
+    const rows = keys.map(k=>{
+      const g = groups[k];
+      const s = sumOf(g);
+      running += s;
+      return `<tr><td>${periodRowLabel(g0, k, g.repDate)}</td><td>${g.count}</td>${colored(g.pnl)}${colored(g.dep)}${colored(g.wd)}${colored(g.promo)}${hasOther?colored(g.other):''}${colored(s,true)}<td>${cellValue(running, rate)}</td></tr>`;
+    });
+    html += rows.reverse().join('');
+    html += `<tr class="total-row"><td>합계</td><td>${T.count}</td>${colored(T.pnl)}${colored(T.dep)}${colored(T.wd)}${colored(T.promo)}${hasOther?colored(T.other):''}${colored(total,true)}<td>-</td></tr>`;
+    document.getElementById('combTable').innerHTML = keys.length ? html : '<tr><th>선택한 기간에 내역이 없어요</th></tr>';
+  }
+
+  // 기간마다 여러 막대를 나란히 그리는 차트. bars: [{axisLabel, values:[{v,color}], tooltip}]
+  function drawGroupedBarChart(canvasId, bars){
+    const canvas = document.getElementById(canvasId);
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth, h = 170;
+    canvas.width = w*dpr; canvas.height = h*dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr,dpr);
+    ctx.clearRect(0,0,w,h);
+    if(bars.length === 0){
+      ctx.fillStyle = '#687975'; ctx.font = '12px monospace';
+      ctx.fillText('데이터가 부족합니다', 10, h/2);
+      canvas._bars = [];
+      return;
+    }
+    const padTop = 8, padBottom = 34, padSide = 6;
+    const chartH = h - padTop - padBottom;
+    const maxAbs = Math.max(1, ...bars.flatMap(b=>b.values.map(x=>Math.abs(x.v))));
+    const zeroY = padTop + chartH/2;
+    const gap = (w - padSide*2) / bars.length;
+    const n = bars[0].values.length;
+    const groupW = Math.max(3, gap * 0.8);
+    const barW = Math.max(1, groupW / n);
+    const hitRects = [];
+    const skip = Math.ceil(bars.length/8);
+
+    bars.forEach((bar,i)=>{
+      const gx = padSide + i*gap + (gap-groupW)/2;
+      bar.values.forEach((x,j)=>{
+        const bh = (Math.abs(x.v)/maxAbs) * (chartH/2);
+        ctx.fillStyle = x.color;
+        const bx = gx + j*barW;
+        if(x.v >= 0) ctx.fillRect(bx, zeroY-bh, Math.max(1,barW-0.5), bh);
+        else ctx.fillRect(bx, zeroY, Math.max(1,barW-0.5), bh);
+      });
+      hitRects.push({ x: padSide + i*gap, w: gap, tooltip: bar.tooltip });
+      if(i % skip === 0){
+        ctx.save();
+        ctx.translate(gx+groupW/2, zeroY + chartH/2 + 14);
+        ctx.rotate(-Math.PI/4);
+        ctx.fillStyle = '#687975'; ctx.font = '9px monospace'; ctx.textAlign = 'right';
+        ctx.fillText(bar.axisLabel, 0, 0);
+        ctx.restore();
+      }
+    });
+    ctx.strokeStyle = 'rgba(24,36,34,0.15)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padSide, zeroY); ctx.lineTo(w-padSide, zeroY); ctx.stroke();
+    canvas._bars = hitRects;
+    bindChartTooltip(canvas);
   }
 
   function cashflowMonthKey(d){ return monthKey(d); }
@@ -1472,6 +1662,9 @@
   mountPeriodControl('cashPeriodCtl', cashPeriod,
     () => renderCashflowView(),
     () => rangeOfDates(lastCashFlows.map(f=>f.time)));
+  mountPeriodControl('combPeriodCtl', combPeriod,
+    () => renderCombinedView(),
+    () => rangeOfDates(trades.map(t=>t.time).concat(lastCashFlows.map(f=>f.time))));
 
   // ---------- Claude API summary ----------
   const apiKeyInput = document.getElementById('apiKeyInput');
